@@ -38,7 +38,7 @@ fn main() {
                     }
                     let next = children[i + 1..]
                         .iter()
-                        .find_map(|c| tag_name(c))
+                        .find_map(tag_name)
                         .unwrap_or_else(|| "(end)".to_string());
                     let line = text[..usize::from(child.text_range().start())].matches('\n').count();
                     let pos = block.lines[line.min(block.lines.len() - 1)].pos;

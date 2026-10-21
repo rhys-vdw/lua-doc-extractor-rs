@@ -232,14 +232,15 @@ fn tag_warnings(raw: &Raw, items: &[Item], i: usize, block: &Block) -> Vec<Strin
                 ));
             }
         }
-        "field" | "class" | "enum" | "alias" if !item.inline && text_follows => {
-            // Text after a blank line describes the next tag, which is emmylua's convention.
-            if directly_below(next) || text_is_unattached {
-                warnings.push(format!(
-                    "text below @{} belongs to the next tag in emmylua; put it on the tag line, or above the tag",
-                    raw.name
-                ));
-            }
+        // Text after a blank line describes the next tag, which is emmylua's convention.
+        "field" | "class" | "enum" | "alias"
+            if !item.inline && text_follows && (directly_below(next) || text_is_unattached) =>
+        {
+            warnings.push(format!(
+                "text below @{} belongs to the next tag in emmylua; put it on the tag line, or above \
+                 the tag",
+                raw.name
+            ));
         }
         _ => {}
     }
