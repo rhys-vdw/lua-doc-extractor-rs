@@ -65,13 +65,13 @@ fn render_item(item: &Item, options: &Options) -> String {
             } else {
                 let fields: Vec<String> = fields
                     .iter()
-                    .map(|f| render_field(f, "\t", options))
+                    .map(|f| render_field(f, InTable::Yes, options))
                     .collect();
                 format!("{{\n{}\n}}", fields.join(",\n\n"))
             };
             with_comment(comment, source, options, format!("{local}{path} = {body}"))
         }
-        Item::Field(field) => render_field(field, "", options),
+        Item::Field(field) => render_field(field, InTable::No, options),
         Item::Comment { comment, source } => {
             lua_comment(&comment_lines(comment, source, options), "")
         }
@@ -101,9 +101,27 @@ fn comment_lines(comment: &Comment, source: &Source, options: &Options) -> Vec<S
     lines
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum InTable {
+    Yes,
+    No,
+}
+
 /// A literal becomes the value (`STOP = 0`); any other type becomes `---@type` and `nil`.
-fn render_field(field: &Field, indent: &str, options: &Options) -> String {
-    let mut lines = field.typed.description.clone();
+///
+/// A field's own description and its doc's description are both kept. As in v3, a field in a
+/// table puts its own first, and a standalone field puts the doc's first.
+fn render_field(field: &Field, in_table: InTable, options: &Options) -> String {
+    let (own, doc) = (
+        field.typed.description.clone(),
+        field.comment.description.clone(),
+    );
+    let (mut lines, rest) = match in_table {
+        InTable::Yes => (own, doc),
+        InTable::No => (doc, own),
+    };
+    join(&mut lines, rest);
+    let indent = if in_table == InTable::Yes { "\t" } else { "" };
     let value = match &field.typed.literal {
         Some(literal) => literal.clone(),
         None => {

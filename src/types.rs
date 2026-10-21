@@ -45,8 +45,13 @@ pub fn parse_type(lines: &[&str]) -> Result<Typed, String> {
     };
 
     let range = ty.syntax().text_range();
-    let start = locate(lines, usize::from(range.start()));
+    let mut start = locate(lines, usize::from(range.start()));
     let end = locate(lines, usize::from(range.end()));
+    if start.0 == 0 {
+        // A type on the tag's line starts at its first character. The node can start later:
+        // the `(` of `(A|B)?` isn't part of it.
+        start.1 = lines[0].len() - lines[0].trim_start().len();
+    }
 
     let mut ty_lines = slice(lines, start, end);
     if start.0 > 0 {
@@ -54,6 +59,16 @@ pub fn parse_type(lines: &[&str]) -> Result<Typed, String> {
         ty_lines.insert(0, String::new());
     }
     let literal = is_literal(ty.syntax()).then(|| ty_lines.join("\n"));
+    // emmylua ends a type at `?`, so `T?|U` and `T?[]` silently become type `T?` and a
+    // description starting `|U` or `[]` (UPSTREAM.md #13).
+    let rest = lines[end.0][end.1..].trim_start();
+    if ty_lines.last().is_some_and(|l| l.ends_with('?')) && rest.starts_with(['|', '[']) {
+        return Err(format!(
+            "emmylua ends the type at `?`, so `{}{rest}` isn't read as one type; \
+             write `(T|U)?` or `(T?)[]`",
+            ty_lines.join("")
+        ));
+    }
     let after = slice(
         lines,
         end,
@@ -155,6 +170,13 @@ mod tests {
         assert_eq!(t.ty, ["{ x: integer, y: integer }"]);
         assert_eq!(t.literal, None);
         assert_eq!(t.description, ["A point."]);
+    }
+
+    #[test]
+    fn parenthesised_type() {
+        let t = parse("(integer|table<string, boolean>|Foo)? The value.");
+        assert_eq!(t.ty, ["(integer|table<string, boolean>|Foo)?"]);
+        assert_eq!(t.description, ["The value."]);
     }
 
     #[test]

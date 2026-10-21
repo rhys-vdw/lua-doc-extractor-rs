@@ -219,8 +219,11 @@ pub fn interpret(doc: Doc, diagnostics: &mut Vec<Diagnostic>) -> Vec<Decl> {
             };
         }
         if fields_only {
-            join(&mut field.typed.description, description.clone());
-            field.comment.tags = tag_lines.clone();
+            // Where this goes relative to the field's own description is decided by `emit`.
+            field.comment = Comment {
+                description: description.clone(),
+                tags: tag_lines.clone(),
+            };
         }
         decls.push(Decl::Field(field));
     }

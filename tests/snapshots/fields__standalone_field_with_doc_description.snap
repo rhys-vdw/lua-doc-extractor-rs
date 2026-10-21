@@ -1,0 +1,12 @@
+---
+source: tests/fields.rs
+expression: lib.body()
+---
+---Some description.
+---
+---More.
+---
+---Some more.
+---
+---@type number
+foo = nil

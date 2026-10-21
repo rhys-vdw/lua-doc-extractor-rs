@@ -1,0 +1,8 @@
+---
+source: tests/fields.rs
+expression: lib.body()
+---
+---This is my cool global.
+---
+---@type Foo
+foo = nil

@@ -1,0 +1,8 @@
+---
+source: tests/fields.rs
+expression: lib.body()
+---
+---The description.
+---
+---@type integer
+SomeTable.field = nil

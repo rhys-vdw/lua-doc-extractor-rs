@@ -1,0 +1,9 @@
+---
+source: tests/fields.rs
+expression: lib.body()
+---
+---This is my cool deprecated global.
+---
+---@type Foo
+---@deprecated
+foo = nil
