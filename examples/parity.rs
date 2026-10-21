@@ -18,8 +18,8 @@ fn main() {
         panic!("usage: parity <stubs dir> <old dir> <new dir>");
     };
 
-    // emmylua's type rendering varies between runs (union order, alias expansion), so
-    // only facts that come out the same in two runs are compared.
+    // emmylua's type rendering varies between runs (union order, alias expansion), so only
+    // facts that come out the same in two runs are compared (workaround A, UPSTREAM.md #6).
     let (old_facts, old_unstable) = stable_facts(stubs, old, "old");
     let (new_facts, new_unstable) = stable_facts(stubs, new, "new");
     for fact in old_unstable.union(&new_unstable) {

@@ -1,8 +1,8 @@
 //! Splits typed text (`integer The unit.`) into a type and a description, using
 //! emmylua's parser.
 //!
-//! `emmylua_parser` only makes whole-chunk parsing public, so the text is parsed as
-//! the body of a `---@type` tag. This is the only place that does so.
+//! `emmylua_parser` only makes whole-chunk parsing public, so the text is parsed as the body of a
+//! `---@type` tag. This is the only place that does so (workaround E, UPSTREAM.md #4).
 
 use emmylua_parser::{
     LuaAstNode, LuaDocTagType, LuaParser, LuaSyntaxKind, ParserConfig,

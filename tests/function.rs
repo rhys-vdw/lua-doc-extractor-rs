@@ -125,8 +125,8 @@ fn several_function_tags_share_one_doc() {
     }
 }
 
-/// emmylua's doc JSON has no params for global functions (UPSTREAM.md), so this only
-/// checks that the function exists.
+/// emmylua's doc JSON has no params for global functions, so this only checks the generated
+/// Lua (workaround C, UPSTREAM.md #9).
 #[test]
 fn global_function() {
     let lib = extract(
