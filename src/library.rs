@@ -6,6 +6,7 @@ use std::collections::{HashMap, HashSet};
 use crate::decl::{Comment, Decl, Field, TypeKind};
 use crate::doc::Source;
 use crate::name::{Path, parse_path};
+use crate::text::Line;
 
 #[derive(Debug, Clone)]
 pub enum Item {
@@ -16,6 +17,7 @@ pub enum Item {
         comment: Comment,
         fields: Vec<Field>,
         source: Source,
+        line: Option<usize>,
     },
     /// `Path.name = value`, outside any table declared here
     Field(Field),
@@ -25,6 +27,7 @@ pub enum Item {
         params: Vec<String>,
         comment: Comment,
         source: Source,
+        line: Option<usize>,
     },
     /// A comment with no code
     Comment { comment: Comment, source: Source },
@@ -57,11 +60,13 @@ pub fn resolve(decls: Vec<Decl>) -> Vec<Item> {
                 params,
                 comment,
                 source,
+                line,
             } => items.push(Item::Function {
                 path,
                 params,
                 comment,
                 source,
+                line,
             }),
             Decl::Comment { comment, source } => items.push(Item::Comment { comment, source }),
             Decl::Field(field) => {
@@ -85,20 +90,32 @@ pub fn resolve(decls: Vec<Decl>) -> Vec<Item> {
                 path,
                 comment,
                 source,
-            } => add_table(&mut items, &mut tables, path, false, comment, source),
+                line,
+            } => add_table(
+                &mut items,
+                &mut tables,
+                (path, false),
+                comment,
+                source,
+                line,
+            ),
             Decl::Type {
                 kind,
                 path,
                 comment,
                 source,
-            } => add_table(
-                &mut items,
-                &mut tables,
-                path,
-                kind == TypeKind::Class,
-                comment,
-                source,
-            ),
+                line,
+            } => {
+                let is_local = kind == TypeKind::Class;
+                add_table(
+                    &mut items,
+                    &mut tables,
+                    (path, is_local),
+                    comment,
+                    source,
+                    line,
+                )
+            }
         }
     }
 
@@ -111,8 +128,8 @@ pub fn resolve(decls: Vec<Decl>) -> Vec<Item> {
 }
 
 /// The description after `@enum Name`, if the comment starts with an `@enum` tag.
-fn enum_description(tags: &[String]) -> Option<&str> {
-    let rest = tags.first()?.strip_prefix("@enum ")?;
+fn enum_description(tags: &[Line]) -> Option<&str> {
+    let rest = tags.first()?.text.strip_prefix("@enum ")?;
     let (_, description) = parse_path(rest.trim_start())?;
     Some(description.trim())
 }
@@ -121,10 +138,10 @@ fn enum_description(tags: &[String]) -> Option<&str> {
 fn add_table(
     items: &mut Vec<Item>,
     tables: &mut HashMap<String, usize>,
-    path: Path,
-    is_local: bool,
+    (path, is_local): (Path, bool),
     comment: Comment,
     source: Source,
+    line: Option<usize>,
 ) {
     let key = path.to_string();
     match tables.get(&key) {
@@ -138,9 +155,8 @@ fn add_table(
                 if enum_description(&existing.tags).is_some()
                     && let Some(more) = enum_description(&comment.tags)
                 {
-                    existing.tags[0] = format!("{} {more}", existing.tags[0])
-                        .trim_end()
-                        .to_string();
+                    let merged = format!("{} {more}", existing.tags[0].text);
+                    existing.tags[0].text = merged.trim_end().to_string();
                     comment.tags.remove(0);
                 }
                 existing.merge(comment);
@@ -155,6 +171,7 @@ fn add_table(
                 comment,
                 fields: Vec::new(),
                 source,
+                line,
             });
         }
     }

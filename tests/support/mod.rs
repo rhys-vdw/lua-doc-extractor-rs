@@ -62,7 +62,8 @@ pub fn extract_reporting(stubs: &str, cpp: &str) -> Lib {
 }
 
 fn run(stubs: &str, cpp: &str, options: &Options) -> Lib {
-    let (lua, diagnostics) = extract_lua("test.cpp", &dedent(cpp), options);
+    let (rendered, diagnostics) = extract_lua("test.cpp", &dedent(cpp), options);
+    let lua = rendered.lua;
 
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(dir.path().join("stubs.lua"), format!("---@meta\n{stubs}\n")).unwrap();
@@ -92,9 +93,9 @@ fn run(stubs: &str, cpp: &str, options: &Options) -> Lib {
 impl Lib {
     /// The generated Lua after the header, for snapshots.
     pub fn body(&self) -> &str {
-        self.lua
-            .split_once("-- ------------\n\n")
-            .map_or(&self.lua, |(_, body)| body)
+        // The header is six lines.
+        let body = self.lua.splitn(7, '\n').nth(6).unwrap_or("");
+        body.trim_start_matches('\n')
     }
 
     /// Asserts exactly one warning, at `line` of the C++, containing `text`.

@@ -1,0 +1,12 @@
+---
+source: tests/line_map.rs
+expression: mapped(cpp)
+---
+ - | 
+ 2 | ---The description.
+ - | ---
+ 3 | ---Whether it is on.
+ - | ---
+ 3 | ---@type boolean
+ 1 | ---@see [test.cpp#L1-L4](https://example.com/test.cpp#L1-L4)
+ 3 | Spring.MoveCtrl.Enabled = nil

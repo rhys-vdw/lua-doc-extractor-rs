@@ -1,0 +1,17 @@
+---
+source: tests/line_map.rs
+expression: mapped(cpp)
+---
+ - | 
+ 2 | ---Numbers.
+ - | ---
+ 3 | ---@enum Numbers
+ 1 | ---@see [test.cpp#L1-L5](https://example.com/test.cpp#L1-L5)
+ 3 | Numbers = {
+ 1 | 	---@see [test.cpp#L1-L5](https://example.com/test.cpp#L1-L5)
+ 4 | 	ONE = 1,
+ - | 
+ 7 | 	---Two.
+ 7 | 	---@see [test.cpp#L7-L7](https://example.com/test.cpp#L7-L7)
+ 7 | 	TWO = 2
+ 3 | }

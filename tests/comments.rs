@@ -73,7 +73,7 @@ fn inline_code_with_double_quotes() {
 #[test]
 fn empty_comments_are_ignored() {
     let lib = extract("/***\n *\n */");
-    assert_eq!(lib.body(), "\n");
+    assert_eq!(lib.body(), "");
 }
 
 /// v3 accepted LDoc's `@return?`. emmylua can't parse it, so v4 reports it, and passes the
@@ -179,5 +179,5 @@ fn no_source_links_when_nothing_is_generated() {
         "/*************************************/\n\n/*************************************/",
         "https://github.com/rhys-vdw/lua-doc-extractor/blob/main/",
     );
-    assert_eq!(lib.body(), "\n");
+    assert_eq!(lib.body(), "");
 }

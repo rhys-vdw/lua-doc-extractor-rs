@@ -17,10 +17,10 @@ mod text;
 pub mod types;
 
 use doc::{Diagnostic, parse_doc};
-pub use emit::Options;
+pub use emit::{Options, Rendered};
 
-/// Extracts one source file into the text of one Lua file.
-pub fn extract(path: &str, source: &str, options: &Options) -> (String, Vec<Diagnostic>) {
+/// Extracts one source file into one Lua file, with its line map.
+pub fn extract(path: &str, source: &str, options: &Options) -> (Rendered, Vec<Diagnostic>) {
     let mut diagnostics = Vec::new();
     let docs: Vec<_> = scan::scan(source)
         .iter()

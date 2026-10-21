@@ -4,6 +4,7 @@
 
 use crate::name::{Path, parse_path};
 use crate::scan::{Block, Pos};
+use crate::text::Line;
 use crate::types::{Typed, parse_type};
 use emmylua_parser::{LuaParser, LuaSyntaxKind, ParserConfig};
 
@@ -18,7 +19,7 @@ pub struct Source {
 #[derive(Debug, Clone)]
 pub struct Doc {
     pub source: Source,
-    pub description: Vec<String>,
+    pub description: Vec<Line>,
     pub tags: Vec<Tag>,
 }
 
@@ -27,12 +28,16 @@ pub enum Tag {
     /// `@function Spring.X [description]`
     Function {
         path: Path,
-        description: Vec<String>,
+        description: Vec<Line>,
+        /// The tag's line.
+        line: Option<usize>,
     },
     /// `@table Name [description]`
     Table {
         path: Path,
-        description: Vec<String>,
+        description: Vec<Line>,
+        /// The tag's line.
+        line: Option<usize>,
     },
     /// `@field Table.name type [description]` or `@global name type [description]`.
     Field {
@@ -51,14 +56,14 @@ pub enum Tag {
     Other(Raw),
     /// A description that isn't part of a tag's line. emmylua attaches it to the next tag,
     /// if any, so it's kept in place.
-    Text(Vec<String>),
+    Text(Vec<Line>),
 }
 
 /// A tag as written: its name, the rest of its line, and its continuation lines.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Raw {
     pub name: String,
-    pub lines: Vec<String>,
+    pub lines: Vec<Line>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -107,19 +112,19 @@ pub fn parse_doc(path: &str, block: &Block, diagnostics: &mut Vec<Diagnostic>) -
     let mut description = Vec::new();
     let mut tags = Vec::new();
     for (i, item) in parsed.items.iter().enumerate() {
-        let mut lines: Vec<String> = block.lines[item.start..=item.end]
+        let mut lines: Vec<Line> = block.lines[item.start..=item.end]
             .iter()
-            .map(|l| l.text.clone())
+            .map(|l| Line::new(l.text.clone(), Some(l.pos.line)))
             .collect();
-        while lines.len() > 1 && lines.last().is_some_and(|l| l.trim().is_empty()) {
+        while lines.len() > 1 && lines.last().is_some_and(Line::is_blank) {
             lines.pop();
         }
         match item.kind {
             ItemKind::Description => description = lines,
             ItemKind::Text => tags.push(Tag::Text(lines)),
             ItemKind::Tag => {
-                let (name, rest) = tag_start(&lines[0]).expect("a tag item starts with a tag");
-                let mut raw_lines = vec![rest.trim_start().to_string()];
+                let (name, rest) = tag_start(&lines[0].text).expect("a tag item starts with a tag");
+                let mut raw_lines = vec![Line::new(rest.trim_start(), lines[0].src)];
                 raw_lines.extend(lines[1..].iter().cloned());
                 let raw = Raw {
                     name: name.to_string(),
@@ -307,7 +312,7 @@ fn tag_warnings(raw: &Raw, items: &[Item], i: usize, block: &Block) -> Vec<Strin
         "param" | "return" => {
             let continued = raw.lines[1..]
                 .iter()
-                .any(|l| !l.trim().is_empty() && !l.trim_start().starts_with('|'));
+                .any(|l| !l.is_blank() && !l.text.trim_start().starts_with('|'));
             if continued || text_follows {
                 warnings.push(format!(
                     "@{} description must be on one line, on the tag line; move longer text to \
@@ -339,7 +344,9 @@ fn tag_start(text: &str) -> Option<(&str, &str)> {
 }
 
 fn to_tag(raw: Raw, source: &Source) -> Result<Tag, (Raw, String)> {
-    let first = raw.lines[0].as_str();
+    let first = raw.lines[0].text.clone();
+    let first = first.as_str();
+    let line = raw.lines[0].src;
     let fail = |raw: Raw, message: String| Err((raw, message));
 
     match raw.name.as_str() {
@@ -347,19 +354,27 @@ fn to_tag(raw: Raw, source: &Source) -> Result<Tag, (Raw, String)> {
             let Some((path, rest)) = parse_path(first) else {
                 return fail(raw.clone(), format!("expected a name after @{}", raw.name));
             };
-            let description = continuation(rest, &raw.lines[1..]);
+            let description = continuation(Line::new(rest, line), &raw.lines[1..]);
             Ok(if raw.name == "function" {
-                Tag::Function { path, description }
+                Tag::Function {
+                    path,
+                    description,
+                    line,
+                }
             } else {
-                Tag::Table { path, description }
+                Tag::Table {
+                    path,
+                    description,
+                    line,
+                }
             })
         }
         "field" | "global" => {
             let Some((path, rest)) = parse_path(first) else {
                 return fail(raw.clone(), format!("expected a name after @{}", raw.name));
             };
-            let mut lines = vec![rest];
-            lines.extend(raw.lines[1..].iter().map(String::as_str));
+            let mut lines = vec![Line::new(rest, line)];
+            lines.extend(raw.lines[1..].iter().cloned());
             match parse_type(&lines) {
                 Ok(typed) => Ok(Tag::Field {
                     path,
@@ -409,8 +424,8 @@ fn to_tag(raw: Raw, source: &Source) -> Result<Tag, (Raw, String)> {
 }
 
 /// The rest of a tag's first line, followed by its continuation lines.
-fn continuation(rest: &str, more: &[String]) -> Vec<String> {
-    let mut lines = vec![rest.trim().to_string()];
+fn continuation(rest: Line, more: &[Line]) -> Vec<Line> {
+    let mut lines = vec![Line::new(rest.text.trim(), rest.src)];
     lines.extend(more.iter().cloned());
     lines
 }
@@ -438,7 +453,8 @@ mod tests {
             " */",
         ));
         assert!(diagnostics.is_empty(), "{diagnostics:?}");
-        assert_eq!(doc.description, ["Command constants."]);
+        let description: Vec<_> = doc.description.iter().map(|l| l.text.as_str()).collect();
+        assert_eq!(description, ["Command constants."]);
         assert!(
             matches!(doc.tags.last(), Some(Tag::Enum { .. })),
             "{:#?}",

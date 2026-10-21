@@ -1,0 +1,11 @@
+---
+source: tests/line_map.rs
+expression: mapped(cpp)
+---
+ - | 
+ 3 | ---Gets the health.
+ - | ---
+ 5 | ---@param unitID integer The unit.
+ 6 | ---@return number health
+ 2 | ---@see [test.cpp#L2-L7](https://example.com/test.cpp#L2-L7)
+ 4 | function Spring.GetUnitHealth(unitID) end

@@ -5,15 +5,15 @@
 
 use crate::doc::{Diagnostic, Doc, Raw, Severity, Source, Tag};
 use crate::name::Path;
-use crate::text::{join, trimmed};
+use crate::text::{Line, join, trimmed};
 use crate::types::Typed;
 
 /// The comment written above a declaration: a description, then tag lines.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Comment {
-    pub description: Vec<String>,
+    pub description: Vec<Line>,
     /// Tags as written, plus any free text between them, in order.
-    pub tags: Vec<String>,
+    pub tags: Vec<Line>,
 }
 
 impl Comment {
@@ -32,6 +32,8 @@ pub enum TypeKind {
     Enum,
 }
 
+/// Each declaration keeps `line`, the C++ line of the tag that declares it, for the code
+/// that's generated from it.
 #[derive(Debug, Clone)]
 pub enum Decl {
     /// `@function Spring.X`
@@ -40,6 +42,7 @@ pub enum Decl {
         params: Vec<String>,
         comment: Comment,
         source: Source,
+        line: Option<usize>,
     },
     /// `@field Table.name` outside a class, or `@global name`
     Field(Field),
@@ -48,6 +51,7 @@ pub enum Decl {
         path: Path,
         comment: Comment,
         source: Source,
+        line: Option<usize>,
     },
     /// `@class Name` or `@enum Name`
     Type {
@@ -55,6 +59,7 @@ pub enum Decl {
         path: Path,
         comment: Comment,
         source: Source,
+        line: Option<usize>,
     },
     /// A doc that declares nothing, e.g. an `@alias`
     Comment { comment: Comment, source: Source },
@@ -66,6 +71,7 @@ pub struct Field {
     pub typed: Typed,
     pub comment: Comment,
     pub source: Source,
+    pub line: Option<usize>,
 }
 
 pub fn interpret(doc: Doc, diagnostics: &mut Vec<Diagnostic>) -> Vec<Decl> {
@@ -76,19 +82,19 @@ pub fn interpret(doc: Doc, diagnostics: &mut Vec<Diagnostic>) -> Vec<Decl> {
     } = doc;
     let is_class = tags.iter().any(|t| matches!(t, Tag::Class { .. }));
 
-    let mut functions: Vec<(Path, Vec<String>)> = Vec::new();
-    let mut table: Option<(Path, Vec<String>)> = None;
-    let mut enum_: Option<(Path, Vec<String>)> = None;
-    let mut class: Option<Path> = None;
+    let mut functions: Vec<(Path, Vec<Line>, Option<usize>)> = Vec::new();
+    let mut table: Option<(Path, Vec<Line>, Option<usize>)> = None;
+    let mut enum_: Option<(Path, Vec<Line>)> = None;
+    let mut class: Option<(Path, Option<usize>)> = None;
     let mut fields: Vec<Field> = Vec::new();
     let mut params: Vec<String> = Vec::new();
     // Tags (and free text) in order, for the comment above the declaration.
-    let mut lines: Vec<String> = Vec::new();
+    let mut lines: Vec<Line> = Vec::new();
     // The same tags without the free text, for fields that take the doc's tags.
-    let mut tag_lines: Vec<String> = Vec::new();
+    let mut tag_lines: Vec<Line> = Vec::new();
     // Free text that no field claimed.
-    let mut free_text: Vec<String> = Vec::new();
-    let mut pending_text: Option<Vec<String>> = None;
+    let mut free_text: Vec<Line> = Vec::new();
+    let mut pending_text: Option<Vec<Line>> = None;
 
     for tag in tags {
         // Text directly above a generated field is its description, as emmylua reads a
@@ -104,11 +110,19 @@ pub fn interpret(doc: Doc, diagnostics: &mut Vec<Diagnostic>) -> Vec<Decl> {
         }
         let before = lines.len();
         match tag {
-            Tag::Function { path, description } => functions.push((path, description)),
-            Tag::Table { path, description } => table = Some((path, description)),
+            Tag::Function {
+                path,
+                description,
+                line,
+            } => functions.push((path, description, line)),
+            Tag::Table {
+                path,
+                description,
+                line,
+            } => table = Some((path, description, line)),
             Tag::Enum { path, raw } => enum_ = Some((path, render(&raw))),
             Tag::Class { path, raw } => {
-                class = Some(path);
+                class = Some((path, raw.lines[0].src));
                 lines.extend(render(&raw));
             }
             Tag::Field { raw, .. } if is_class => lines.extend(render(&raw)),
@@ -116,7 +130,7 @@ pub fn interpret(doc: Doc, diagnostics: &mut Vec<Diagnostic>) -> Vec<Decl> {
                 path,
                 mut typed,
                 source: field_source,
-                ..
+                raw,
             } => {
                 if let Some(above) = pending_text.take() {
                     let inline = std::mem::take(&mut typed.description);
@@ -128,6 +142,7 @@ pub fn interpret(doc: Doc, diagnostics: &mut Vec<Diagnostic>) -> Vec<Decl> {
                     typed,
                     comment: Comment::default(),
                     source: field_source,
+                    line: raw.lines[0].src,
                 });
             }
             Tag::Param { name, raw } => {
@@ -144,7 +159,7 @@ pub fn interpret(doc: Doc, diagnostics: &mut Vec<Diagnostic>) -> Vec<Decl> {
         free_text.extend(text);
     }
 
-    let comment = |extra: Vec<String>| {
+    let comment = |extra: Vec<Line>| {
         let mut description = description.clone();
         join(&mut description, extra);
         Comment {
@@ -154,12 +169,13 @@ pub fn interpret(doc: Doc, diagnostics: &mut Vec<Diagnostic>) -> Vec<Decl> {
     };
     let mut decls = Vec::new();
 
-    for (path, inline) in functions {
+    for (path, inline, line) in functions {
         decls.push(Decl::Function {
             path,
             params: params.clone(),
             comment: comment(inline),
             source: source.clone(),
+            line,
         });
     }
 
@@ -167,10 +183,11 @@ pub fn interpret(doc: Doc, diagnostics: &mut Vec<Diagnostic>) -> Vec<Decl> {
     let owner = enum_
         .as_ref()
         .map(|(p, _)| p)
-        .or(table.as_ref().map(|(p, _)| p))
+        .or(table.as_ref().map(|(p, _, _)| p))
         .cloned();
     if let Some((path, enum_line)) = enum_ {
         // `@enum` goes first, so emmylua attaches the tags that follow it to the enum.
+        let line = enum_line[0].src;
         let mut c = comment(vec![]);
         c.tags = [enum_line, c.tags].concat();
         decls.push(Decl::Type {
@@ -178,22 +195,27 @@ pub fn interpret(doc: Doc, diagnostics: &mut Vec<Diagnostic>) -> Vec<Decl> {
             path,
             comment: c,
             source: source.clone(),
+            line,
         });
     }
-    if let Some((path, inline)) = table {
+    if let Some((path, inline, line)) = table {
         decls.push(Decl::Table {
             path,
             comment: comment(inline),
             source: source.clone(),
+            line,
         });
     }
     // With an explicit `@table`, the class is just a tag on it.
-    if let Some(path) = class.filter(|_| decls.iter().all(|d| !matches!(d, Decl::Table { .. }))) {
+    if let Some((path, line)) =
+        class.filter(|_| decls.iter().all(|d| !matches!(d, Decl::Table { .. })))
+    {
         decls.push(Decl::Type {
             kind: TypeKind::Class,
             path,
             comment: comment(vec![]),
             source: source.clone(),
+            line,
         });
     }
 
@@ -246,11 +268,12 @@ pub fn interpret(doc: Doc, diagnostics: &mut Vec<Diagnostic>) -> Vec<Decl> {
 }
 
 /// A tag as Lua comment lines, without trailing blank lines.
-fn render(raw: &Raw) -> Vec<String> {
+fn render(raw: &Raw) -> Vec<Line> {
     let mut lines = raw.lines.clone();
-    while lines.len() > 1 && lines.last().is_some_and(|l| l.trim().is_empty()) {
+    while lines.len() > 1 && lines.last().is_some_and(Line::is_blank) {
         lines.pop();
     }
-    lines[0] = format!("@{} {}", raw.name, lines[0]).trim_end().to_string();
+    let first = format!("@{} {}", raw.name, lines[0].text);
+    lines[0] = Line::new(first.trim_end(), lines[0].src);
     lines
 }

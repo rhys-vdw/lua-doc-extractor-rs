@@ -1,8 +1,10 @@
+use std::collections::BTreeMap;
 use std::path::{Component, Path, PathBuf};
 use std::process::ExitCode;
 
 use clap::Parser;
 use lua_doc_extractor::{Options, doc::Severity, extract, scan::scan};
+use serde_json::json;
 
 /// Extracts Lua docs from C-style comments.
 #[derive(Parser)]
@@ -23,6 +25,10 @@ struct Args {
     /// Exit with an error code if any errors are reported.
     #[arg(long)]
     error: bool,
+
+    /// Write a map from each generated line to its C++ line to this JSON file.
+    #[arg(long)]
+    sourcemap: Option<PathBuf>,
 }
 
 fn main() -> ExitCode {
@@ -47,6 +53,7 @@ fn main() -> ExitCode {
     }
 
     let mut error_count = 0;
+    let mut sourcemap = BTreeMap::new();
     for file in &files {
         let Some(path) = relative_path(file) else {
             eprintln!(
@@ -69,7 +76,7 @@ fn main() -> ExitCode {
             continue;
         }
 
-        let (lua, diagnostics) = extract(&path, &source, &options);
+        let (rendered, diagnostics) = extract(&path, &source, &options);
         for d in &diagnostics {
             let severity = match d.severity {
                 Severity::Error => "error",
@@ -85,11 +92,22 @@ fn main() -> ExitCode {
             .filter(|d| d.severity == Severity::Error)
             .count();
 
-        let out = args.dest.join(format!("{path}.lua"));
+        let output = format!("{path}.lua");
+        let out = args.dest.join(&output);
         if let Some(parent) = out.parent() {
             std::fs::create_dir_all(parent).expect("create output directory");
         }
-        std::fs::write(&out, lua).expect("write output");
+        std::fs::write(&out, &rendered.lua).expect("write output");
+        sourcemap.insert(
+            output,
+            json!({ "source": path, "lines": rendered.line_map }),
+        );
+    }
+
+    if let Some(file) = &args.sourcemap {
+        let json = json!({ "version": 1, "files": sourcemap });
+        let text = serde_json::to_string(&json).expect("serialise source map");
+        std::fs::write(file, text).expect("write source map");
     }
 
     if args.error && error_count > 0 {
