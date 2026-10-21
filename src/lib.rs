@@ -32,5 +32,6 @@ pub fn extract(path: &str, source: &str, options: &Options) -> (Rendered, Vec<Di
         .flat_map(|doc| decl::interpret(doc, &mut diagnostics))
         .collect();
     let items = library::resolve(decls);
+    diagnostics.sort_by_key(|d| (d.pos.line, d.pos.col));
     (emit::emit(&items, options), diagnostics)
 }

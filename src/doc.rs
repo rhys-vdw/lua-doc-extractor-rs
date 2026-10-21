@@ -95,20 +95,8 @@ pub fn parse_doc(path: &str, block: &Block, diagnostics: &mut Vec<Diagnostic>) -
             message,
         })
     };
-    for (line, message) in &parsed.errors {
-        // Name the tag the error is in, since emmylua's messages don't.
-        let tag = parsed
-            .items
-            .iter()
-            .find(|i| i.kind == ItemKind::Tag && (i.start..=i.end).contains(line))
-            .and_then(|i| tag_start(&block.lines[i.start].text));
-        let message = match tag {
-            Some((name, _)) => format!("in @{name}: {message}"),
-            None => message.clone(),
-        };
-        report(Severity::Error, *line, message);
-    }
-
+    // Tags with an error of our own, which says more than emmylua's.
+    let mut own_errors: Vec<(usize, usize)> = Vec::new();
     let mut description = Vec::new();
     let mut tags = Vec::new();
     for (i, item) in parsed.items.iter().enumerate() {
@@ -134,19 +122,31 @@ pub fn parse_doc(path: &str, block: &Block, diagnostics: &mut Vec<Diagnostic>) -
                 for message in tag_warnings(&raw, &parsed.items, i, block) {
                     report(Severity::Warning, item.start, message);
                 }
-                let has_error = parsed
-                    .errors
-                    .iter()
-                    .any(|(l, _)| (item.start..=item.end).contains(l));
                 tags.push(to_tag(raw, &source).unwrap_or_else(|(raw, message)| {
-                    // emmylua's error already covers this line.
-                    if !has_error {
-                        report(Severity::Error, item.start, message);
-                    }
+                    report(Severity::Error, item.start, message);
+                    own_errors.push((item.start, item.end));
                     Tag::Other(raw)
                 }));
             }
         }
+    }
+
+    for (line, message) in &parsed.errors {
+        let in_item = |&(start, end): &(usize, usize)| (start..=end).contains(line);
+        if own_errors.iter().any(in_item) {
+            continue;
+        }
+        // Name the tag the error is in, since emmylua's messages don't.
+        let tag = parsed
+            .items
+            .iter()
+            .find(|i| i.kind == ItemKind::Tag && (i.start..=i.end).contains(line))
+            .and_then(|i| tag_start(&block.lines[i.start].text));
+        let message = match tag {
+            Some((name, _)) => format!("in @{name}: {message}"),
+            None => message.clone(),
+        };
+        report(Severity::Error, *line, message);
     }
 
     Doc {

@@ -107,6 +107,9 @@ fn main() -> ExitCode {
     if let Some(file) = &args.sourcemap {
         let json = json!({ "version": 1, "files": sourcemap });
         let text = serde_json::to_string(&json).expect("serialise source map");
+        if let Some(parent) = file.parent() {
+            std::fs::create_dir_all(parent).expect("create source map directory");
+        }
         std::fs::write(file, text).expect("write source map");
     }
 
