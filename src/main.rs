@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::process::ExitCode;
 
 use clap::Parser;
@@ -48,7 +48,15 @@ fn main() -> ExitCode {
 
     let mut error_count = 0;
     for file in &files {
-        let path = display_path(file);
+        let Some(path) = relative_path(file) else {
+            eprintln!(
+                "{}: error: source files must be inside the working directory, so that the \
+                 output can mirror their paths under --dest",
+                file.display()
+            );
+            error_count += 1;
+            continue;
+        };
         let source = match std::fs::read_to_string(file) {
             Ok(source) => source,
             Err(e) => {
@@ -112,9 +120,11 @@ fn expand_braces(pattern: &str) -> Vec<String> {
     vec![pattern.to_string()]
 }
 
-/// Paths are written relative to the working directory, with forward slashes.
-fn display_path(file: &Path) -> String {
-    let cwd = std::env::current_dir().unwrap_or_default();
-    let relative = file.strip_prefix(&cwd).unwrap_or(file);
-    relative.to_string_lossy().replace('\\', "/")
+/// The path relative to the working directory, with forward slashes, or `None` if the file is
+/// outside it. Output is written to the same path under `--dest`, so it must stay inside.
+fn relative_path(file: &Path) -> Option<String> {
+    let cwd = std::env::current_dir().ok()?;
+    let relative = if file.is_absolute() { file.strip_prefix(&cwd).ok()? } else { file };
+    let inside = relative.components().all(|c| matches!(c, Component::Normal(_) | Component::CurDir));
+    inside.then(|| relative.to_string_lossy().replace('\\', "/"))
 }
