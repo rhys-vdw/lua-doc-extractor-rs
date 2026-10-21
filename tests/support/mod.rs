@@ -27,7 +27,10 @@ pub struct Lib {
 /// declares the tables the docs use, e.g. `Spring = {}`.
 pub fn extract_with(stubs: &str, cpp: &str) -> Lib {
     let (lua, diagnostics) = extract_lua("test.cpp", &dedent(cpp), &Options::default());
-    assert!(diagnostics.is_empty(), "unexpected diagnostics: {diagnostics:#?}");
+    assert!(
+        diagnostics.is_empty(),
+        "unexpected diagnostics: {diagnostics:#?}"
+    );
 
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(dir.path().join("stubs.lua"), format!("---@meta\n{stubs}\n")).unwrap();
@@ -63,7 +66,11 @@ impl Lib {
             .members(owner)
             .find(|m| m["type"] == "fn" && m["name"] == member)
             .unwrap_or_else(|| self.fail(&format!("no function {name}"), self.owner(owner)));
-        Function { lib: self, name: name.to_string(), value }
+        Function {
+            lib: self,
+            name: name.to_string(),
+            value,
+        }
     }
 
     /// A field on a table or class: `CMD.STOP`, `ArchiveInfo.name`.
@@ -73,7 +80,11 @@ impl Lib {
             .members(owner)
             .find(|m| m["type"] == "field" && m["name"] == member)
             .unwrap_or_else(|| self.fail(&format!("no field {name}"), self.owner(owner)));
-        Field { lib: self, name: name.to_string(), value }
+        Field {
+            lib: self,
+            name: name.to_string(),
+            value,
+        }
     }
 
     /// A class, enum or alias.
@@ -82,7 +93,11 @@ impl Lib {
             .types()
             .find(|t| t["name"] == name)
             .unwrap_or_else(|| self.fail(&format!("no type {name}"), None));
-        Type { lib: self, name: name.to_string(), value }
+        Type {
+            lib: self,
+            name: name.to_string(),
+            value,
+        }
     }
 
     fn types(&self) -> impl Iterator<Item = &Value> {
@@ -95,17 +110,28 @@ impl Lib {
         let globals = self.doc["globals"].as_array().into_iter().flatten();
         let mut candidates = globals.chain(self.types()).filter(|v| v["name"] == name);
         let first = candidates.next()?;
-        if first["members"].is_array() { Some(first) } else { candidates.next().or(Some(first)) }
+        if first["members"].is_array() {
+            Some(first)
+        } else {
+            candidates.next().or(Some(first))
+        }
     }
 
     fn members(&self, owner: &str) -> impl Iterator<Item = &Value> {
-        let owner = self.owner(owner).unwrap_or_else(|| self.fail(&format!("no table or type {owner}"), None));
+        let owner = self
+            .owner(owner)
+            .unwrap_or_else(|| self.fail(&format!("no table or type {owner}"), None));
         owner["members"].as_array().into_iter().flatten()
     }
 
     fn fail(&self, message: &str, view: Option<&Value>) -> ! {
-        let view = view.map_or("(nothing)".to_string(), |v| serde_json::to_string_pretty(&strip(v)).unwrap());
-        panic!("{message}\n\nemmylua's view:\n{view}\n\ngenerated Lua:\n{}", self.lua);
+        let view = view.map_or("(nothing)".to_string(), |v| {
+            serde_json::to_string_pretty(&strip(v)).unwrap()
+        });
+        panic!(
+            "{message}\n\nemmylua's view:\n{view}\n\ngenerated Lua:\n{}",
+            self.lua
+        );
     }
 }
 
@@ -127,30 +153,64 @@ impl<'a> Function<'a> {
             .into_iter()
             .flatten()
             .find(|p| p["name"] == name)
-            .unwrap_or_else(|| self.lib.fail(&format!("{} has no param {name}", self.name), Some(self.value)));
-        Param { lib: self.lib, subject: format!("{} param {name}", self.name), owner: self.value, value }
+            .unwrap_or_else(|| {
+                self.lib.fail(
+                    &format!("{} has no param {name}", self.name),
+                    Some(self.value),
+                )
+            });
+        Param {
+            lib: self.lib,
+            subject: format!("{} param {name}", self.name),
+            owner: self.value,
+            value,
+        }
     }
 
     /// The `index`th return value, from 0.
     pub fn returns(&self, index: usize) -> Param<'a> {
-        let value = self.value["returns"]
-            .get(index)
-            .unwrap_or_else(|| self.lib.fail(&format!("{} has no return {index}", self.name), Some(self.value)));
-        Param { lib: self.lib, subject: format!("{} return {index}", self.name), owner: self.value, value }
+        let value = self.value["returns"].get(index).unwrap_or_else(|| {
+            self.lib.fail(
+                &format!("{} has no return {index}", self.name),
+                Some(self.value),
+            )
+        });
+        Param {
+            lib: self.lib,
+            subject: format!("{} return {index}", self.name),
+            owner: self.value,
+            value,
+        }
     }
 
     pub fn param_names(&self, expected: &[&str]) -> &Self {
-        let names: Vec<&str> =
-            self.value["params"].as_array().into_iter().flatten().filter_map(|p| p["name"].as_str()).collect();
+        let names: Vec<&str> = self.value["params"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|p| p["name"].as_str())
+            .collect();
         if names != expected {
-            self.lib.fail(&format!("{} params: expected {expected:?}, found {names:?}", self.name), Some(self.value));
+            self.lib.fail(
+                &format!(
+                    "{} params: expected {expected:?}, found {names:?}",
+                    self.name
+                ),
+                Some(self.value),
+            );
         }
         self
     }
 
     fn check(&self, what: &str, actual: String, expected: &str) {
         if actual != expected {
-            self.lib.fail(&format!("{} {what}: expected {expected:?}, found {actual:?}", self.name), Some(self.value));
+            self.lib.fail(
+                &format!(
+                    "{} {what}: expected {expected:?}, found {actual:?}",
+                    self.name
+                ),
+                Some(self.value),
+            );
         }
     }
 }
@@ -165,11 +225,19 @@ pub struct Param<'a> {
 
 impl Param<'_> {
     pub fn has_type(&self, expected: &str) -> &Self {
-        self.check("type", self.value["typ"].as_str().unwrap_or("").to_string(), expected)
+        self.check(
+            "type",
+            self.value["typ"].as_str().unwrap_or("").to_string(),
+            expected,
+        )
     }
 
     pub fn named(&self, expected: &str) -> &Self {
-        self.check("name", self.value["name"].as_str().unwrap_or("").to_string(), expected)
+        self.check(
+            "name",
+            self.value["name"].as_str().unwrap_or("").to_string(),
+            expected,
+        )
     }
 
     pub fn has_description(&self, expected: &str) -> &Self {
@@ -178,7 +246,13 @@ impl Param<'_> {
 
     fn check(&self, what: &str, actual: String, expected: &str) -> &Self {
         if actual != expected {
-            self.lib.fail(&format!("{} {what}: expected {expected:?}, found {actual:?}", self.subject), Some(self.owner));
+            self.lib.fail(
+                &format!(
+                    "{} {what}: expected {expected:?}, found {actual:?}",
+                    self.subject
+                ),
+                Some(self.owner),
+            );
         }
         self
     }
@@ -192,12 +266,20 @@ pub struct Field<'a> {
 
 impl Field<'_> {
     pub fn has_type(&self, expected: &str) -> &Self {
-        self.check("type", self.value["typ"].as_str().unwrap_or("").to_string(), expected)
+        self.check(
+            "type",
+            self.value["typ"].as_str().unwrap_or("").to_string(),
+            expected,
+        )
     }
 
     /// The literal value, e.g. `0` for `CMD.STOP = 0`.
     pub fn has_value(&self, expected: &str) -> &Self {
-        self.check("value", self.value["literal"].as_str().unwrap_or("").to_string(), expected)
+        self.check(
+            "value",
+            self.value["literal"].as_str().unwrap_or("").to_string(),
+            expected,
+        )
     }
 
     pub fn has_description(&self, expected: &str) -> &Self {
@@ -206,7 +288,13 @@ impl Field<'_> {
 
     fn check(&self, what: &str, actual: String, expected: &str) -> &Self {
         if actual != expected {
-            self.lib.fail(&format!("{} {what}: expected {expected:?}, found {actual:?}", self.name), Some(self.value));
+            self.lib.fail(
+                &format!(
+                    "{} {what}: expected {expected:?}, found {actual:?}",
+                    self.name
+                ),
+                Some(self.value),
+            );
         }
         self
     }
@@ -220,7 +308,11 @@ pub struct Type<'a> {
 
 impl Type<'_> {
     pub fn is(&self, kind: &str) -> &Self {
-        self.check("kind", self.value["type"].as_str().unwrap_or("").to_string(), kind)
+        self.check(
+            "kind",
+            self.value["type"].as_str().unwrap_or("").to_string(),
+            kind,
+        )
     }
 
     pub fn has_description(&self, expected: &str) -> &Self {
@@ -229,7 +321,13 @@ impl Type<'_> {
 
     fn check(&self, what: &str, actual: String, expected: &str) -> &Self {
         if actual != expected {
-            self.lib.fail(&format!("{} {what}: expected {expected:?}, found {actual:?}", self.name), Some(self.value));
+            self.lib.fail(
+                &format!(
+                    "{} {what}: expected {expected:?}, found {actual:?}",
+                    self.name
+                ),
+                Some(self.value),
+            );
         }
         self
     }
@@ -243,9 +341,12 @@ fn text(v: &Value) -> String {
 /// Drops source locations, which only add noise to failure messages.
 fn strip(v: &Value) -> Value {
     match v {
-        Value::Object(map) => {
-            Value::Object(map.iter().filter(|(k, _)| *k != "loc").map(|(k, v)| (k.clone(), strip(v))).collect())
-        }
+        Value::Object(map) => Value::Object(
+            map.iter()
+                .filter(|(k, _)| *k != "loc")
+                .map(|(k, v)| (k.clone(), strip(v)))
+                .collect(),
+        ),
         Value::Array(items) => Value::Array(items.iter().map(strip).collect()),
         other => other.clone(),
     }
@@ -254,6 +355,15 @@ fn strip(v: &Value) -> Value {
 /// Removes the common indent, so tests can indent their C++.
 fn dedent(s: &str) -> String {
     let lines: Vec<&str> = s.lines().skip_while(|l| l.trim().is_empty()).collect();
-    let indent = lines.iter().filter(|l| !l.trim().is_empty()).map(|l| l.len() - l.trim_start().len()).min().unwrap_or(0);
-    lines.iter().map(|l| l.get(indent..).unwrap_or("").trim_end()).collect::<Vec<_>>().join("\n")
+    let indent = lines
+        .iter()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| l.len() - l.trim_start().len())
+        .min()
+        .unwrap_or(0);
+    lines
+        .iter()
+        .map(|l| l.get(indent..).unwrap_or("").trim_end())
+        .collect::<Vec<_>>()
+        .join("\n")
 }

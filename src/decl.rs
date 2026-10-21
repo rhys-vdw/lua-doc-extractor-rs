@@ -35,13 +35,27 @@ pub enum TypeKind {
 #[derive(Debug, Clone)]
 pub enum Decl {
     /// `@function Spring.X`
-    Function { path: Path, params: Vec<String>, comment: Comment, source: Source },
+    Function {
+        path: Path,
+        params: Vec<String>,
+        comment: Comment,
+        source: Source,
+    },
     /// `@field Table.name` outside a class, or `@global name`
     Field(Field),
     /// `@table Name`
-    Table { path: Path, comment: Comment, source: Source },
+    Table {
+        path: Path,
+        comment: Comment,
+        source: Source,
+    },
     /// `@class Name` or `@enum Name`
-    Type { kind: TypeKind, path: Path, comment: Comment, source: Source },
+    Type {
+        kind: TypeKind,
+        path: Path,
+        comment: Comment,
+        source: Source,
+    },
     /// A doc that declares nothing, e.g. an `@alias`
     Comment { comment: Comment, source: Source },
 }
@@ -55,7 +69,11 @@ pub struct Field {
 }
 
 pub fn interpret(doc: Doc, diagnostics: &mut Vec<Diagnostic>) -> Vec<Decl> {
-    let Doc { source, description, tags } = doc;
+    let Doc {
+        source,
+        description,
+        tags,
+    } = doc;
     let is_class = tags.iter().any(|t| matches!(t, Tag::Class { .. }));
 
     let mut functions: Vec<(Path, Vec<String>)> = Vec::new();
@@ -94,13 +112,23 @@ pub fn interpret(doc: Doc, diagnostics: &mut Vec<Diagnostic>) -> Vec<Decl> {
                 lines.extend(render(&raw));
             }
             Tag::Field { raw, .. } if is_class => lines.extend(render(&raw)),
-            Tag::Field { path, mut typed, source: field_source, .. } => {
+            Tag::Field {
+                path,
+                mut typed,
+                source: field_source,
+                ..
+            } => {
                 if let Some(above) = pending_text.take() {
                     let inline = std::mem::take(&mut typed.description);
                     typed.description = trimmed(above);
                     join(&mut typed.description, inline);
                 }
-                fields.push(Field { path, typed, comment: Comment::default(), source: field_source });
+                fields.push(Field {
+                    path,
+                    typed,
+                    comment: Comment::default(),
+                    source: field_source,
+                });
             }
             Tag::Param { name, raw } => {
                 params.push(name);
@@ -119,28 +147,54 @@ pub fn interpret(doc: Doc, diagnostics: &mut Vec<Diagnostic>) -> Vec<Decl> {
     let comment = |extra: Vec<String>| {
         let mut description = description.clone();
         join(&mut description, extra);
-        Comment { description, tags: lines.clone() }
+        Comment {
+            description,
+            tags: lines.clone(),
+        }
     };
     let mut decls = Vec::new();
 
     for (path, inline) in functions {
-        decls.push(Decl::Function { path, params: params.clone(), comment: comment(inline), source: source.clone() });
+        decls.push(Decl::Function {
+            path,
+            params: params.clone(),
+            comment: comment(inline),
+            source: source.clone(),
+        });
     }
 
     // Fields named without their table (`@field STOP 0`) belong to the doc's enum or table.
-    let owner = enum_.as_ref().map(|(p, _)| p).or(table.as_ref().map(|(p, _)| p)).cloned();
+    let owner = enum_
+        .as_ref()
+        .map(|(p, _)| p)
+        .or(table.as_ref().map(|(p, _)| p))
+        .cloned();
     if let Some((path, enum_line)) = enum_ {
         // `@enum` goes first, so emmylua attaches the tags that follow it to the enum.
         let mut c = comment(vec![]);
         c.tags = [enum_line, c.tags].concat();
-        decls.push(Decl::Type { kind: TypeKind::Enum, path, comment: c, source: source.clone() });
+        decls.push(Decl::Type {
+            kind: TypeKind::Enum,
+            path,
+            comment: c,
+            source: source.clone(),
+        });
     }
     if let Some((path, inline)) = table {
-        decls.push(Decl::Table { path, comment: comment(inline), source: source.clone() });
+        decls.push(Decl::Table {
+            path,
+            comment: comment(inline),
+            source: source.clone(),
+        });
     }
     // With an explicit `@table`, the class is just a tag on it.
     if let Some(path) = class.filter(|_| decls.iter().all(|d| !matches!(d, Decl::Table { .. }))) {
-        decls.push(Decl::Type { kind: TypeKind::Class, path, comment: comment(vec![]), source: source.clone() });
+        decls.push(Decl::Type {
+            kind: TypeKind::Class,
+            path,
+            comment: comment(vec![]),
+            source: source.clone(),
+        });
     }
 
     // A doc that only declares fields gives them its description and tags. Free text
@@ -148,7 +202,10 @@ pub fn interpret(doc: Doc, diagnostics: &mut Vec<Diagnostic>) -> Vec<Decl> {
     let fields_only = decls.is_empty() && !fields.is_empty();
     if fields_only && !free_text.is_empty() {
         decls.push(Decl::Comment {
-            comment: Comment { description: Vec::new(), tags: free_text },
+            comment: Comment {
+                description: Vec::new(),
+                tags: free_text,
+            },
             source: source.clone(),
         });
     }
@@ -156,7 +213,10 @@ pub fn interpret(doc: Doc, diagnostics: &mut Vec<Diagnostic>) -> Vec<Decl> {
         if let Some(owner) = &owner
             && field.path.segments.len() == 1
         {
-            field.path = Path { segments: [owner.segments.clone(), field.path.segments].concat(), is_method: false };
+            field.path = Path {
+                segments: [owner.segments.clone(), field.path.segments].concat(),
+                is_method: false,
+            };
         }
         if fields_only {
             join(&mut field.typed.description, description.clone());
@@ -174,7 +234,10 @@ pub fn interpret(doc: Doc, diagnostics: &mut Vec<Diagnostic>) -> Vec<Decl> {
                 message: "this doc has only a description, so it isn't attached to anything".into(),
             });
         }
-        decls.push(Decl::Comment { comment: comment(vec![]), source });
+        decls.push(Decl::Comment {
+            comment: comment(vec![]),
+            source,
+        });
     }
     decls
 }

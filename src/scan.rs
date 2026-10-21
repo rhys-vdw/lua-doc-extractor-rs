@@ -47,7 +47,10 @@ pub fn scan(source: &str) -> Vec<Block> {
             continue;
         };
 
-        let start = Pos { line: line_index + 1, col: char_col(line, open) };
+        let start = Pos {
+            line: line_index + 1,
+            col: char_col(line, open),
+        };
         let mut body_start = open + 1 + count_stars(&line[open + 1..]);
         let mut raw: Vec<(Pos, String)> = Vec::new();
         let mut first = true;
@@ -63,15 +66,24 @@ pub fn scan(source: &str) -> Vec<Block> {
             if let Some(close) = find_close(rest) {
                 let close_abs = text_start + close.start;
                 raw.push((
-                    Pos { line: line_index + 1, col: char_col(line, text_start) },
+                    Pos {
+                        line: line_index + 1,
+                        col: char_col(line, text_start),
+                    },
                     rest[..close.start].to_string(),
                 ));
-                end = Some(Pos { line: line_index + 1, col: char_col(line, close_abs) });
+                end = Some(Pos {
+                    line: line_index + 1,
+                    col: char_col(line, close_abs),
+                });
                 col = text_start + close.end;
                 break;
             }
             raw.push((
-                Pos { line: line_index + 1, col: char_col(line, text_start) },
+                Pos {
+                    line: line_index + 1,
+                    col: char_col(line, text_start),
+                },
                 rest.to_string(),
             ));
             first = false;
@@ -80,7 +92,11 @@ pub fn scan(source: &str) -> Vec<Block> {
         }
 
         match end {
-            Some(end) => blocks.push(Block { start, end, lines: tidy(raw) }),
+            Some(end) => blocks.push(Block {
+                start,
+                end,
+                lines: tidy(raw),
+            }),
             // Unterminated comment: nothing more to find.
             None => break,
         }
@@ -111,7 +127,10 @@ struct Close {
 fn find_close(s: &str) -> Option<Close> {
     let slash = s.find("*/")? + 1;
     let start = s[..slash].trim_end_matches('*').len();
-    Some(Close { start, end: slash + 1 })
+    Some(Close {
+        start,
+        end: slash + 1,
+    })
 }
 
 fn count_stars(s: &str) -> usize {
@@ -147,7 +166,10 @@ fn tidy(raw: Vec<(Pos, String)>) -> Vec<Line> {
         .map(|(pos, text)| {
             let cut = indent.min(text.len() - text.trim_start().len());
             Line {
-                pos: Pos { line: pos.line, col: pos.col + cut },
+                pos: Pos {
+                    line: pos.line,
+                    col: pos.col + cut,
+                },
                 text: text[cut..].trim_end().to_string(),
             }
         })

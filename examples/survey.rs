@@ -17,19 +17,35 @@ fn main() {
     for path in std::env::args().skip(1) {
         let source = std::fs::read_to_string(&path).unwrap();
         for block in scan(&source) {
-            let text: String = block.lines.iter().map(|l| format!("---{}\n", l.text)).collect();
+            let text: String = block
+                .lines
+                .iter()
+                .map(|l| format!("---{}\n", l.text))
+                .collect();
             let tree = LuaParser::parse(&text, ParserConfig::default());
-            let Some(comment) = tree.get_red_root().descendants().find(|n| n.kind() == LuaSyntaxKind::Comment.into()) else {
+            let Some(comment) = tree
+                .get_red_root()
+                .descendants()
+                .find(|n| n.kind() == LuaSyntaxKind::Comment.into())
+            else {
                 continue;
             };
 
             let children: Vec<_> = comment.children_with_tokens().collect();
             let mut prev_tag: Option<String> = None;
             for (i, child) in children.iter().enumerate() {
-                let LuaKind::Syntax(kind) = child.kind() else { continue };
+                let LuaKind::Syntax(kind) = child.kind() else {
+                    continue;
+                };
                 if kind == LuaSyntaxKind::DocDescription {
                     let Some(prev) = &prev_tag else { continue };
-                    let snippet = child.to_string().replace("---", "").trim().chars().take(60).collect::<String>();
+                    let snippet = child
+                        .to_string()
+                        .replace("---", "")
+                        .trim()
+                        .chars()
+                        .take(60)
+                        .collect::<String>();
                     if snippet.is_empty() {
                         continue;
                     }
@@ -40,7 +56,9 @@ fn main() {
                         .iter()
                         .find_map(tag_name)
                         .unwrap_or_else(|| "(end)".to_string());
-                    let line = text[..usize::from(child.text_range().start())].matches('\n').count();
+                    let line = text[..usize::from(child.text_range().start())]
+                        .matches('\n')
+                        .count();
                     let pos = block.lines[line.min(block.lines.len() - 1)].pos;
                     counts
                         .entry((prev.clone(), next))
@@ -66,7 +84,9 @@ fn is_inline(children: &[emmylua_parser::LuaSyntaxElement], i: usize) -> bool {
     for c in children[..i].iter().rev() {
         match c.kind() {
             LuaKind::Token(LuaTokenKind::TkWhitespace | LuaTokenKind::TkDocContinue) => {}
-            LuaKind::Token(LuaTokenKind::TkEndOfLine | LuaTokenKind::TkNormalStart) => return false,
+            LuaKind::Token(LuaTokenKind::TkEndOfLine | LuaTokenKind::TkNormalStart) => {
+                return false;
+            }
             _ => return true,
         }
     }

@@ -131,7 +131,11 @@ fn member_facts(out: &mut BTreeSet<String>, owner: &str, m: &Value) {
 
 fn field_facts(out: &mut BTreeSet<String>, kind: &str, owner: &str, f: &Value) {
     let name = f["name"].as_str().unwrap();
-    let name = if owner.is_empty() { name.to_string() } else { format!("{owner}.{name}") };
+    let name = if owner.is_empty() {
+        name.to_string()
+    } else {
+        format!("{owner}.{name}")
+    };
     let typ = f["typ"].as_str().unwrap_or("?");
     match f["literal"].as_str() {
         Some(literal) => out.insert(format!("{kind} {name}: {typ} = {literal}")),
@@ -145,11 +149,17 @@ fn property_facts(out: &mut BTreeSet<String>, subject: &str, v: &Value) {
         out.insert(format!("{subject} desc: {desc}"));
     }
     if v["deprecated"].as_bool() == Some(true) {
-        out.insert(format!("{subject} deprecated: {}", v["deprecation_reason"].as_str().unwrap_or("")));
+        out.insert(format!(
+            "{subject} deprecated: {}",
+            v["deprecation_reason"].as_str().unwrap_or("")
+        ));
     }
     for tag in v["tag_content"].as_array().into_iter().flatten() {
         let content = normalise(tag["content"].as_str().unwrap_or(""));
-        out.insert(format!("{subject} @{} {content}", tag["tag_name"].as_str().unwrap()));
+        out.insert(format!(
+            "{subject} @{} {content}",
+            tag["tag_name"].as_str().unwrap()
+        ));
     }
 }
 

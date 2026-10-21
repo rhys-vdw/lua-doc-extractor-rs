@@ -75,9 +75,15 @@ fn main() -> ExitCode {
                 Severity::Error => "error",
                 Severity::Warning => "warning",
             };
-            eprintln!("{}:{}:{}: {severity}: {}", d.path, d.pos.line, d.pos.col, d.message);
+            eprintln!(
+                "{}:{}:{}: {severity}: {}",
+                d.path, d.pos.line, d.pos.col, d.message
+            );
         }
-        error_count += diagnostics.iter().filter(|d| d.severity == Severity::Error).count();
+        error_count += diagnostics
+            .iter()
+            .filter(|d| d.severity == Severity::Error)
+            .count();
 
         let out = args.dest.join(format!("{path}.lua"));
         if let Some(parent) = out.parent() {
@@ -86,7 +92,11 @@ fn main() -> ExitCode {
         std::fs::write(&out, lua).expect("write output");
     }
 
-    if args.error && error_count > 0 { ExitCode::FAILURE } else { ExitCode::SUCCESS }
+    if args.error && error_count > 0 {
+        ExitCode::FAILURE
+    } else {
+        ExitCode::SUCCESS
+    }
 }
 
 /// Expands `{a,b}` alternatives, which the `glob` crate doesn't support:
@@ -124,7 +134,13 @@ fn expand_braces(pattern: &str) -> Vec<String> {
 /// outside it. Output is written to the same path under `--dest`, so it must stay inside.
 fn relative_path(file: &Path) -> Option<String> {
     let cwd = std::env::current_dir().ok()?;
-    let relative = if file.is_absolute() { file.strip_prefix(&cwd).ok()? } else { file };
-    let inside = relative.components().all(|c| matches!(c, Component::Normal(_) | Component::CurDir));
+    let relative = if file.is_absolute() {
+        file.strip_prefix(&cwd).ok()?
+    } else {
+        file
+    };
+    let inside = relative
+        .components()
+        .all(|c| matches!(c, Component::Normal(_) | Component::CurDir));
     inside.then(|| relative.to_string_lossy().replace('\\', "/"))
 }

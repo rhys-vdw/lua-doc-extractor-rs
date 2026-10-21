@@ -29,7 +29,10 @@ impl Path {
     }
 
     pub fn last(&self) -> Path {
-        Path { segments: vec![self.segments.last().unwrap().clone()], is_method: false }
+        Path {
+            segments: vec![self.segments.last().unwrap().clone()],
+            is_method: false,
+        }
     }
 }
 
@@ -68,7 +71,13 @@ pub fn parse_path(s: &str) -> Option<(Path, &str)> {
     if rest.starts_with(|c: char| c.is_alphanumeric() || c == '_') {
         return None;
     }
-    Some((Path { segments, is_method }, rest))
+    Some((
+        Path {
+            segments,
+            is_method,
+        },
+        rest,
+    ))
 }
 
 fn identifier(s: &str) -> Option<(&str, &str)> {
@@ -95,8 +104,8 @@ fn find_index_close(s: &str) -> Option<usize> {
 }
 
 const KEYWORDS: &[&str] = &[
-    "and", "break", "do", "else", "elseif", "end", "false", "for", "function", "goto", "if",
-    "in", "local", "nil", "not", "or", "repeat", "return", "then", "true", "until", "while",
+    "and", "break", "do", "else", "elseif", "end", "false", "for", "function", "goto", "if", "in",
+    "local", "nil", "not", "or", "repeat", "return", "then", "true", "until", "while",
 ];
 
 fn is_keyword(s: &str) -> bool {
@@ -131,7 +140,10 @@ mod tests {
 
     #[test]
     fn dotted() {
-        assert_eq!(roundtrip("Spring.MoveCtrl.Enabled boolean"), ("Spring.MoveCtrl.Enabled".into(), " boolean"));
+        assert_eq!(
+            roundtrip("Spring.MoveCtrl.Enabled boolean"),
+            ("Spring.MoveCtrl.Enabled".into(), " boolean")
+        );
     }
 
     #[test]
@@ -145,7 +157,10 @@ mod tests {
     #[test]
     fn indexed() {
         assert_eq!(roundtrip("Foo[1] integer"), ("Foo[1]".into(), " integer"));
-        assert_eq!(roundtrip(r#"Foo["a]b"].c x"#), (r#"Foo["a]b"].c"#.into(), " x"));
+        assert_eq!(
+            roundtrip(r#"Foo["a]b"].c x"#),
+            (r#"Foo["a]b"].c"#.into(), " x")
+        );
         assert_eq!(roundtrip("[1] integer"), ("[1]".into(), " integer"));
     }
 

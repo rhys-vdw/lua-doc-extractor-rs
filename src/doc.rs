@@ -25,11 +25,22 @@ pub struct Doc {
 #[derive(Debug, Clone)]
 pub enum Tag {
     /// `@function Spring.X [description]`
-    Function { path: Path, description: Vec<String> },
+    Function {
+        path: Path,
+        description: Vec<String>,
+    },
     /// `@table Name [description]`
-    Table { path: Path, description: Vec<String> },
+    Table {
+        path: Path,
+        description: Vec<String>,
+    },
     /// `@field Table.name type [description]` or `@global name type [description]`.
-    Field { path: Path, typed: Typed, raw: Raw, source: Source },
+    Field {
+        path: Path,
+        typed: Typed,
+        raw: Raw,
+        source: Source,
+    },
     /// `@enum Name ...`
     Enum { path: Path, raw: Raw },
     /// `@class Name ...`
@@ -65,10 +76,19 @@ pub struct Diagnostic {
 }
 
 pub fn parse_doc(path: &str, block: &Block, diagnostics: &mut Vec<Diagnostic>) -> Doc {
-    let source = Source { path: path.to_string(), start: block.start, end: block.end };
+    let source = Source {
+        path: path.to_string(),
+        start: block.start,
+        end: block.end,
+    };
     let parsed = split(block);
     let mut report = |severity, line: usize, message: String| {
-        diagnostics.push(Diagnostic { severity, path: path.to_string(), pos: block.lines[line].pos, message })
+        diagnostics.push(Diagnostic {
+            severity,
+            path: path.to_string(),
+            pos: block.lines[line].pos,
+            message,
+        })
     };
     for (line, message) in &parsed.errors {
         report(Severity::Error, *line, message.clone());
@@ -77,7 +97,10 @@ pub fn parse_doc(path: &str, block: &Block, diagnostics: &mut Vec<Diagnostic>) -
     let mut description = Vec::new();
     let mut tags = Vec::new();
     for (i, item) in parsed.items.iter().enumerate() {
-        let mut lines: Vec<String> = block.lines[item.start..=item.end].iter().map(|l| l.text.clone()).collect();
+        let mut lines: Vec<String> = block.lines[item.start..=item.end]
+            .iter()
+            .map(|l| l.text.clone())
+            .collect();
         while lines.len() > 1 && lines.last().is_some_and(|l| l.trim().is_empty()) {
             lines.pop();
         }
@@ -88,12 +111,18 @@ pub fn parse_doc(path: &str, block: &Block, diagnostics: &mut Vec<Diagnostic>) -
                 let (name, rest) = tag_start(&lines[0]).expect("a tag item starts with a tag");
                 let mut raw_lines = vec![rest.trim_start().to_string()];
                 raw_lines.extend(lines[1..].iter().cloned());
-                let raw = Raw { name: name.to_string(), lines: raw_lines };
+                let raw = Raw {
+                    name: name.to_string(),
+                    lines: raw_lines,
+                };
 
                 for message in tag_warnings(&raw, &parsed.items, i, block) {
                     report(Severity::Warning, item.start, message);
                 }
-                let has_error = parsed.errors.iter().any(|(l, _)| (item.start..=item.end).contains(l));
+                let has_error = parsed
+                    .errors
+                    .iter()
+                    .any(|(l, _)| (item.start..=item.end).contains(l));
                 tags.push(to_tag(raw, &source).unwrap_or_else(|(raw, message)| {
                     // emmylua's error already covers this line.
                     if !has_error {
@@ -105,7 +134,11 @@ pub fn parse_doc(path: &str, block: &Block, diagnostics: &mut Vec<Diagnostic>) -
         }
     }
 
-    Doc { source, description, tags }
+    Doc {
+        source,
+        description,
+        tags,
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -148,7 +181,11 @@ fn split(block: &Block) -> Split {
         text.push_str(&line.text);
         text.push('\n');
     }
-    let line_of = |offset: usize| line_starts.partition_point(|&s| s <= offset).saturating_sub(1);
+    let line_of = |offset: usize| {
+        line_starts
+            .partition_point(|&s| s <= offset)
+            .saturating_sub(1)
+    };
 
     let tree = LuaParser::parse(&text, ParserConfig::default());
     let errors = tree
@@ -158,7 +195,10 @@ fn split(block: &Block) -> Split {
         .collect();
 
     let mut items: Vec<Item> = Vec::new();
-    let comment = tree.get_red_root().descendants().find(|n| n.kind() == LuaSyntaxKind::Comment.into());
+    let comment = tree
+        .get_red_root()
+        .descendants()
+        .find(|n| n.kind() == LuaSyntaxKind::Comment.into());
     for node in comment.iter().flat_map(|c| c.children()) {
         let range = node.text_range();
         let start = line_of(usize::from(range.start()));
@@ -167,7 +207,12 @@ fn split(block: &Block) -> Split {
 
         let last = items.last_mut();
         if format!("{kind:?}").starts_with("DocTag") {
-            items.push(Item { kind: ItemKind::Tag, start, end, inline: false });
+            items.push(Item {
+                kind: ItemKind::Tag,
+                start,
+                end,
+                inline: false,
+            });
         } else if kind == LuaSyntaxKind::DocDescription {
             // emmylua leaves empty descriptions after some tags.
             if node.text().to_string().replace("---", "").trim().is_empty() {
@@ -178,8 +223,18 @@ fn split(block: &Block) -> Split {
                     tag.inline = true;
                     tag.end = tag.end.max(end);
                 }
-                None => items.push(Item { kind: ItemKind::Description, start, end, inline: false }),
-                Some(_) => items.push(Item { kind: ItemKind::Text, start, end, inline: false }),
+                None => items.push(Item {
+                    kind: ItemKind::Description,
+                    start,
+                    end,
+                    inline: false,
+                }),
+                Some(_) => items.push(Item {
+                    kind: ItemKind::Text,
+                    start,
+                    end,
+                    inline: false,
+                }),
             }
         } else if let Some(last) = last {
             last.end = last.end.max(end);
@@ -197,12 +252,24 @@ fn split(block: &Block) -> Split {
     });
     let count = items.len();
     for i in 0..count {
-        items[i].end = if i + 1 < count { items[i + 1].start - 1 } else { block.lines.len() - 1 };
+        items[i].end = if i + 1 < count {
+            items[i + 1].start - 1
+        } else {
+            block.lines.len() - 1
+        };
     }
     if let Some(first) = items.first()
         && first.start > 0
     {
-        items.insert(0, Item { kind: ItemKind::Description, start: 0, end: first.start - 1, inline: false });
+        items.insert(
+            0,
+            Item {
+                kind: ItemKind::Description,
+                start: 0,
+                end: first.start - 1,
+                inline: false,
+            },
+        );
     }
     Split { items, errors }
 }
@@ -214,20 +281,27 @@ fn tag_warnings(raw: &Raw, items: &[Item], i: usize, block: &Block) -> Vec<Strin
     let next = items.get(i + 1);
     let text_follows = next.is_some_and(|n| n.kind == ItemKind::Text);
     // No blank line between the tag and the text.
-    let directly_below =
-        |next: Option<&Item>| next.is_some_and(|n| !block.lines[n.start - 1].text.trim().is_empty());
+    let directly_below = |next: Option<&Item>| {
+        next.is_some_and(|n| !block.lines[n.start - 1].text.trim().is_empty())
+    };
     // Text is attached to nothing when no tag follows it, or when the next tag only
     // reads its inline description.
-    let after_text = items.get(i + 2).and_then(|n| tag_start(&block.lines[n.start].text)).map(|(name, _)| name);
-    let text_is_unattached =
-        text_follows && !after_text.is_some_and(|name| matches!(name, "field" | "class" | "enum" | "alias"));
+    let after_text = items
+        .get(i + 2)
+        .and_then(|n| tag_start(&block.lines[n.start].text))
+        .map(|(name, _)| name);
+    let text_is_unattached = text_follows
+        && !after_text.is_some_and(|name| matches!(name, "field" | "class" | "enum" | "alias"));
 
     match raw.name.as_str() {
         "param" | "return" => {
-            let continued = raw.lines[1..].iter().any(|l| !l.trim().is_empty() && !l.trim_start().starts_with('|'));
+            let continued = raw.lines[1..]
+                .iter()
+                .any(|l| !l.trim().is_empty() && !l.trim_start().starts_with('|'));
             if continued || text_follows {
                 warnings.push(format!(
-                    "@{} description must be on one line, on the tag line; move longer text to the function description",
+                    "@{} description must be on one line, on the tag line; move longer text to \
+                     the function description",
                     raw.name
                 ));
             }
@@ -237,8 +311,8 @@ fn tag_warnings(raw: &Raw, items: &[Item], i: usize, block: &Block) -> Vec<Strin
             if !item.inline && text_follows && (directly_below(next) || text_is_unattached) =>
         {
             warnings.push(format!(
-                "text below @{} belongs to the next tag in emmylua; put it on the tag line, or above \
-                 the tag",
+                "text below @{} belongs to the next tag in emmylua; put it on the tag line, or \
+                 above the tag",
                 raw.name
             ));
         }
@@ -277,8 +351,16 @@ fn to_tag(raw: Raw, source: &Source) -> Result<Tag, (Raw, String)> {
             let mut lines = vec![rest];
             lines.extend(raw.lines[1..].iter().map(String::as_str));
             match parse_type(&lines) {
-                Ok(typed) => Ok(Tag::Field { path, typed, raw, source: source.clone() }),
-                Err(message) => fail(raw.clone(), format!("invalid type in @{}: {message}", raw.name)),
+                Ok(typed) => Ok(Tag::Field {
+                    path,
+                    typed,
+                    raw,
+                    source: source.clone(),
+                }),
+                Err(message) => fail(
+                    raw.clone(),
+                    format!("invalid type in @{}: {message}", raw.name),
+                ),
             }
         }
         "enum" => match parse_path(first) {
@@ -302,11 +384,15 @@ fn to_tag(raw: Raw, source: &Source) -> Result<Tag, (Raw, String)> {
             let word = first.split_whitespace().next().unwrap_or("");
             let name = word.strip_suffix('?').unwrap_or(word);
             let valid = name == "..."
-                || parse_path(name).is_some_and(|(path, rest)| rest.is_empty() && path.segments.len() == 1);
+                || parse_path(name)
+                    .is_some_and(|(path, rest)| rest.is_empty() && path.segments.len() == 1);
             if !valid {
                 return fail(raw.clone(), format!("invalid @param name '{word}'"));
             }
-            Ok(Tag::Param { name: name.to_string(), raw })
+            Ok(Tag::Param {
+                name: name.to_string(),
+                raw,
+            })
         }
         _ => Ok(Tag::Other(raw)),
     }
@@ -332,9 +418,21 @@ mod tests {
 
     #[test]
     fn see_then_enum() {
-        let (doc, diagnostics) = parse("/***\n * Command constants.\n *\n * @see Spring.A\n * @see Spring.B\n * @enum CMD\n */");
+        let (doc, diagnostics) = parse(concat!(
+            "/***\n",
+            " * Command constants.\n",
+            " *\n",
+            " * @see Spring.A\n",
+            " * @see Spring.B\n",
+            " * @enum CMD\n",
+            " */",
+        ));
         assert!(diagnostics.is_empty(), "{diagnostics:?}");
         assert_eq!(doc.description, ["Command constants."]);
-        assert!(matches!(doc.tags.last(), Some(Tag::Enum { .. })), "{:#?}", doc.tags);
+        assert!(
+            matches!(doc.tags.last(), Some(Tag::Enum { .. })),
+            "{:#?}",
+            doc.tags
+        );
     }
 }

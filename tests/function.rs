@@ -101,8 +101,14 @@ fn multiple_returns_with_literal_keywords() {
     );
     let f = lib.function("Spring.GetUnitMoveDefID");
     f.has_description("Returns a numerical movedef ID and its name.");
-    f.returns(0).named("moveDefID").has_type("(integer|false)?").has_description("Some long description");
-    f.returns(1).named("moveDefName").has_type("string?").has_description("Another really, really long description");
+    f.returns(0)
+        .named("moveDefID")
+        .has_type("(integer|false)?")
+        .has_description("Some long description");
+    f.returns(1)
+        .named("moveDefName")
+        .has_type("string?")
+        .has_description("Another really, really long description");
 }
 
 #[test]
@@ -137,5 +143,9 @@ fn global_function() {
          */
         "#,
     );
-    assert!(lib.lua.contains("function UnitSeismicPing(x) end"), "{}", lib.lua);
+    assert!(
+        lib.lua.contains("function UnitSeismicPing(x) end"),
+        "{}",
+        lib.lua
+    );
 }

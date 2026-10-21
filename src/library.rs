@@ -10,11 +10,22 @@ use crate::name::Path;
 #[derive(Debug, Clone)]
 pub enum Item {
     /// `[local ]Name = { fields }`
-    Table { path: Path, is_local: bool, comment: Comment, fields: Vec<Field>, source: Source },
+    Table {
+        path: Path,
+        is_local: bool,
+        comment: Comment,
+        fields: Vec<Field>,
+        source: Source,
+    },
     /// `Path.name = value`, outside any table declared here
     Field(Field),
     /// `function Path(params) end`
-    Function { path: Path, params: Vec<String>, comment: Comment, source: Source },
+    Function {
+        path: Path,
+        params: Vec<String>,
+        comment: Comment,
+        source: Source,
+    },
     /// A comment with no code
     Comment { comment: Comment, source: Source },
 }
@@ -25,7 +36,12 @@ pub fn resolve(decls: Vec<Decl>) -> Vec<Item> {
     let field_owners: HashSet<String> = decls
         .iter()
         .filter_map(|d| match d {
-            Decl::Table { path, .. } | Decl::Type { kind: TypeKind::Enum, path, .. } => Some(path.to_string()),
+            Decl::Table { path, .. }
+            | Decl::Type {
+                kind: TypeKind::Enum,
+                path,
+                ..
+            } => Some(path.to_string()),
             _ => None,
         })
         .collect();
@@ -36,24 +52,53 @@ pub fn resolve(decls: Vec<Decl>) -> Vec<Item> {
 
     for decl in decls {
         match decl {
-            Decl::Function { path, params, comment, source } => {
-                items.push(Item::Function { path, params, comment, source })
-            }
+            Decl::Function {
+                path,
+                params,
+                comment,
+                source,
+            } => items.push(Item::Function {
+                path,
+                params,
+                comment,
+                source,
+            }),
             Decl::Comment { comment, source } => items.push(Item::Comment { comment, source }),
             Decl::Field(field) => {
-                let owner = field.path.parent().map(|p| p.to_string()).filter(|p| field_owners.contains(p));
+                let owner = field
+                    .path
+                    .parent()
+                    .map(|p| p.to_string())
+                    .filter(|p| field_owners.contains(p));
                 match owner {
                     Some(owner) => {
-                        let field = Field { path: field.path.last(), ..field };
+                        let field = Field {
+                            path: field.path.last(),
+                            ..field
+                        };
                         table_fields.entry(owner).or_default().push(field);
                     }
                     None => items.push(Item::Field(field)),
                 }
             }
-            Decl::Table { path, comment, source } => add_table(&mut items, &mut tables, path, false, comment, source),
-            Decl::Type { kind, path, comment, source } => {
-                add_table(&mut items, &mut tables, path, kind == TypeKind::Class, comment, source)
-            }
+            Decl::Table {
+                path,
+                comment,
+                source,
+            } => add_table(&mut items, &mut tables, path, false, comment, source),
+            Decl::Type {
+                kind,
+                path,
+                comment,
+                source,
+            } => add_table(
+                &mut items,
+                &mut tables,
+                path,
+                kind == TypeKind::Class,
+                comment,
+                source,
+            ),
         }
     }
 
@@ -77,14 +122,23 @@ fn add_table(
     let key = path.to_string();
     match tables.get(&key) {
         Some(&i) => {
-            if let Item::Table { comment: existing, .. } = &mut items[i] {
+            if let Item::Table {
+                comment: existing, ..
+            } = &mut items[i]
+            {
                 existing.merge(comment);
             }
         }
         None => {
             tables.insert(key, items.len());
             let is_local = is_local && path.segments.len() == 1;
-            items.push(Item::Table { path, is_local, comment, fields: Vec::new(), source });
+            items.push(Item::Table {
+                path,
+                is_local,
+                comment,
+                fields: Vec::new(),
+                source,
+            });
         }
     }
 }

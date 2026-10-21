@@ -13,7 +13,11 @@ pub struct Options {
 }
 
 pub fn emit(items: &[Item], options: &Options) -> String {
-    let body: Vec<String> = items.iter().map(|item| render_item(item, options)).filter(|s| !s.is_empty()).collect();
+    let body: Vec<String> = items
+        .iter()
+        .map(|item| render_item(item, options))
+        .filter(|s| !s.is_empty())
+        .collect();
     format!("{}\n{}\n", header(), body.join("\n\n"))
 }
 
@@ -37,28 +41,51 @@ fn header() -> String {
 
 fn render_item(item: &Item, options: &Options) -> String {
     match item {
-        Item::Function { path, params, comment, source } => {
-            with_comment(comment, source, options, format!("function {path}({}) end", params.join(", ")))
-        }
-        Item::Table { path, is_local, comment, fields, source } => {
+        Item::Function {
+            path,
+            params,
+            comment,
+            source,
+        } => with_comment(
+            comment,
+            source,
+            options,
+            format!("function {path}({}) end", params.join(", ")),
+        ),
+        Item::Table {
+            path,
+            is_local,
+            comment,
+            fields,
+            source,
+        } => {
             let local = if *is_local { "local " } else { "" };
             let body = if fields.is_empty() {
                 "{}".to_string()
             } else {
-                let fields: Vec<String> = fields.iter().map(|f| render_field(f, "\t", options)).collect();
+                let fields: Vec<String> = fields
+                    .iter()
+                    .map(|f| render_field(f, "\t", options))
+                    .collect();
                 format!("{{\n{}\n}}", fields.join(",\n\n"))
             };
             with_comment(comment, source, options, format!("{local}{path} = {body}"))
         }
         Item::Field(field) => render_field(field, "", options),
-        Item::Comment { comment, source } => lua_comment(&comment_lines(comment, source, options), ""),
+        Item::Comment { comment, source } => {
+            lua_comment(&comment_lines(comment, source, options), "")
+        }
     }
 }
 
 /// `---description`, a blank line, `---@tags`, then `code`.
 fn with_comment(comment: &Comment, source: &Source, options: &Options, code: String) -> String {
     let lines = comment_lines(comment, source, options);
-    if lines.is_empty() { code } else { format!("{}\n{code}", lua_comment(&lines, "")) }
+    if lines.is_empty() {
+        code
+    } else {
+        format!("{}\n{code}", lua_comment(&lines, ""))
+    }
 }
 
 fn comment_lines(comment: &Comment, source: &Source, options: &Options) -> Vec<String> {
@@ -90,7 +117,11 @@ fn render_field(field: &Field, indent: &str, options: &Options) -> String {
     lines.extend(field.comment.tags.iter().cloned());
     lines.extend(see_link(&field.source, options));
     let code = format!("{indent}{} = {value}", field.path);
-    if lines.is_empty() { code } else { format!("{}\n{code}", lua_comment(&lines, indent)) }
+    if lines.is_empty() {
+        code
+    } else {
+        format!("{}\n{code}", lua_comment(&lines, indent))
+    }
 }
 
 /// `@see [LuaSyncedRead.cpp#L10-L20](<repo>/rts/Lua/LuaSyncedRead.cpp#L10-L20)`
@@ -99,5 +130,8 @@ fn see_link(source: &Source, options: &Options) -> Option<String> {
     let file = source.path.rsplit('/').next().unwrap_or(&source.path);
     let lines = format!("#L{}-L{}", source.start.line, source.end.line);
     let base = repo.trim_end_matches('/');
-    Some(format!("@see [{file}{lines}]({base}/{}{lines})", source.path))
+    Some(format!(
+        "@see [{file}{lines}]({base}/{}{lines})",
+        source.path
+    ))
 }

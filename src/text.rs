@@ -26,5 +26,9 @@ pub fn join(dest: &mut Vec<String>, src: Vec<String>) {
 
 /// Prefixes each line with `---`.
 pub fn lua_comment(lines: &[String], indent: &str) -> String {
-    lines.iter().map(|l| format!("{indent}---{l}")).collect::<Vec<_>>().join("\n")
+    lines
+        .iter()
+        .map(|l| format!("{indent}---{l}"))
+        .collect::<Vec<_>>()
+        .join("\n")
 }
