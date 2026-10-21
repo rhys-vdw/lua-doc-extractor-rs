@@ -61,6 +61,23 @@ pub fn parse_type(lines: &[&str]) -> Result<Typed, String> {
     Ok(Typed { ty: ty_lines, literal, description: trim_lines(after) })
 }
 
+/// Parses a tag that is passed through unchanged, returning emmylua's first parse error.
+/// `lines` are the text after `@name`, then any continuation lines.
+pub fn check_tag(name: &str, lines: &[String]) -> Result<(), String> {
+    let mut text = format!("---@{name} ");
+    for (i, line) in lines.iter().enumerate() {
+        if i > 0 {
+            text.push_str("\n---");
+        }
+        text.push_str(line);
+    }
+    let tree = LuaParser::parse(&text, ParserConfig::default());
+    match tree.get_errors().first() {
+        Some(error) => Err(error.message.to_string()),
+        None => Ok(()),
+    }
+}
+
 /// A number, string or boolean literal, including negative numbers.
 fn is_literal(node: &emmylua_parser::LuaSyntaxNode) -> bool {
     match node.kind().into() {
