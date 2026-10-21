@@ -1,0 +1,21 @@
+---
+source: tests/enums.rs
+expression: lib.body()
+---
+---These are numbers.
+---
+---@enum Numbers
+---@see [test.cpp#L1-L4](https://foo.com/test.cpp#L1-L4)
+Numbers = {
+	---Six.
+	---@see [test.cpp#L6-L8](https://foo.com/test.cpp#L6-L8)
+	SIX = 6,
+
+	---Seven.
+	---@see [test.cpp#L10-L13](https://foo.com/test.cpp#L10-L13)
+	SEVEN = 7,
+
+	---Eight.
+	---@see [test.cpp#L10-L13](https://foo.com/test.cpp#L10-L13)
+	EIGHT = 8
+}

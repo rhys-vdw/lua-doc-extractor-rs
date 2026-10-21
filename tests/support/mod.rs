@@ -13,6 +13,7 @@
 #![allow(dead_code)]
 
 use emmylua_doc_cli::{CmdArgs, Format, OutputDestination, run_doc_cli};
+use lua_doc_extractor::doc::{Diagnostic, Severity};
 use lua_doc_extractor::{Options, extract as extract_lua};
 use serde_json::Value;
 
@@ -20,17 +21,48 @@ use serde_json::Value;
 pub struct Lib {
     /// The generated Lua, for failure messages.
     pub lua: String,
+    pub diagnostics: Vec<Diagnostic>,
     doc: Value,
 }
 
 /// Extracts `cpp` as `test.cpp`, and analyses the output with emmylua. `stubs` is Lua that
-/// declares the tables the docs use, e.g. `Spring = {}`.
+/// declares the tables the docs use, e.g. `Spring = {}`. Any diagnostic fails the test.
 pub fn extract_with(stubs: &str, cpp: &str) -> Lib {
-    let (lua, diagnostics) = extract_lua("test.cpp", &dedent(cpp), &Options::default());
+    let lib = run(stubs, cpp, &Options::default());
     assert!(
-        diagnostics.is_empty(),
-        "unexpected diagnostics: {diagnostics:#?}"
+        lib.diagnostics.is_empty(),
+        "unexpected diagnostics: {:#?}",
+        lib.diagnostics
     );
+    lib
+}
+
+/// Extracts `cpp` with no stubs. Any diagnostic fails the test.
+pub fn extract(cpp: &str) -> Lib {
+    extract_with("", cpp)
+}
+
+/// Extracts `cpp` with source links to `repo`. Any diagnostic fails the test.
+pub fn extract_with_repo(stubs: &str, cpp: &str, repo: &str) -> Lib {
+    let options = Options {
+        repo: Some(repo.to_string()),
+    };
+    let lib = run(stubs, cpp, &options);
+    assert!(
+        lib.diagnostics.is_empty(),
+        "unexpected diagnostics: {:#?}",
+        lib.diagnostics
+    );
+    lib
+}
+
+/// Extracts `cpp`, keeping its diagnostics for the test to check.
+pub fn extract_reporting(stubs: &str, cpp: &str) -> Lib {
+    run(stubs, cpp, &Options::default())
+}
+
+fn run(stubs: &str, cpp: &str, options: &Options) -> Lib {
+    let (lua, diagnostics) = extract_lua("test.cpp", &dedent(cpp), options);
 
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(dir.path().join("stubs.lua"), format!("---@meta\n{stubs}\n")).unwrap();
@@ -50,15 +82,31 @@ pub fn extract_with(stubs: &str, cpp: &str) -> Lib {
     })
     .expect("emmylua_doc_cli failed");
     let doc = serde_json::from_str(&std::fs::read_to_string(json).unwrap()).unwrap();
-    Lib { lua, doc }
-}
-
-/// Extracts `cpp` with no stubs.
-pub fn extract(cpp: &str) -> Lib {
-    extract_with("", cpp)
+    Lib {
+        lua,
+        diagnostics,
+        doc,
+    }
 }
 
 impl Lib {
+    /// The generated Lua after the header, for snapshots.
+    pub fn body(&self) -> &str {
+        self.lua
+            .split_once("-- ------------\n\n")
+            .map_or(&self.lua, |(_, body)| body)
+    }
+
+    /// Asserts exactly one warning, at `line` of the C++, containing `text`.
+    pub fn warns(&self, line: usize, text: &str) {
+        let [d] = self.diagnostics.as_slice() else {
+            panic!("expected one warning, found {:#?}", self.diagnostics);
+        };
+        assert_eq!(d.severity, Severity::Warning, "{d:#?}");
+        assert_eq!(d.pos.line, line, "{d:#?}");
+        assert!(d.message.contains(text), "{d:#?}");
+    }
+
     /// A function on a table or class: `Spring.GetUnitHealth`, `Foo:bar`.
     pub fn function(&self, name: &str) -> Function<'_> {
         let (owner, member) = name.rsplit_once(['.', ':']).expect("a function on a table");

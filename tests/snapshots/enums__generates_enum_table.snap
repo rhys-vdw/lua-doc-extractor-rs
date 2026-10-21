@@ -1,0 +1,10 @@
+---
+source: tests/enums.rs
+expression: lib.body()
+---
+---@enum Numbers
+Numbers = {
+	FIVE = 5,
+
+	SIX = 6
+}

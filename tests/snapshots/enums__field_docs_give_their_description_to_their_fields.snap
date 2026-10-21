@@ -1,0 +1,21 @@
+---
+source: tests/enums.rs
+expression: lib.body()
+---
+---These are numbers.
+---
+---@enum Numbers
+Numbers = {
+	---This is six.
+	SIX = 6,
+
+	---Seven.
+	---
+	---These are seven and eight.
+	SEVEN = 7,
+
+	---Eight.
+	---
+	---These are seven and eight.
+	EIGHT = 8
+}

@@ -1,0 +1,8 @@
+---
+source: tests/enums.rs
+expression: lib.body()
+---
+---@enum Numbers These are numbers.
+Numbers = {
+	FIVE = 5
+}

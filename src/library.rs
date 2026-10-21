@@ -5,7 +5,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::decl::{Comment, Decl, Field, TypeKind};
 use crate::doc::Source;
-use crate::name::Path;
+use crate::name::{Path, parse_path};
 
 #[derive(Debug, Clone)]
 pub enum Item {
@@ -110,6 +110,13 @@ pub fn resolve(decls: Vec<Decl>) -> Vec<Item> {
     items
 }
 
+/// The description after `@enum Name`, if the comment starts with an `@enum` tag.
+fn enum_description(tags: &[String]) -> Option<&str> {
+    let rest = tags.first()?.strip_prefix("@enum ")?;
+    let (_, description) = parse_path(rest.trim_start())?;
+    Some(description.trim())
+}
+
 /// Adds a table, or merges it into one already declared with the same name.
 fn add_table(
     items: &mut Vec<Item>,
@@ -126,6 +133,16 @@ fn add_table(
                 comment: existing, ..
             } = &mut items[i]
             {
+                let mut comment = comment;
+                // One `@enum` tag, with both descriptions, as v3 does.
+                if enum_description(&existing.tags).is_some()
+                    && let Some(more) = enum_description(&comment.tags)
+                {
+                    existing.tags[0] = format!("{} {more}", existing.tags[0])
+                        .trim_end()
+                        .to_string();
+                    comment.tags.remove(0);
+                }
                 existing.merge(comment);
             }
         }

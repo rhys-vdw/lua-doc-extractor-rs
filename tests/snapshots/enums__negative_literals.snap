@@ -1,0 +1,12 @@
+---
+source: tests/enums.rs
+expression: lib.body()
+---
+---@enum Foo
+Foo = {
+	Z = 0,
+
+	A = -1,
+
+	B = -2
+}
