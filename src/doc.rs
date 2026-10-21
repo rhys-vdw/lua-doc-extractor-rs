@@ -27,7 +27,7 @@ pub enum Tag {
     /// `@function Spring.X [description]`
     Function { path: Path, description: Vec<String> },
     /// `@table Name [description]`
-    Table { path: Path, is_local: bool, description: Vec<String> },
+    Table { path: Path, description: Vec<String> },
     /// `@field Table.name type [description]` or `@global name type [description]`.
     Field { path: Path, typed: Typed, raw: Raw, source: Source },
     /// `@enum Name ...`
@@ -266,7 +266,7 @@ fn to_tag(raw: Raw, source: &Source) -> Result<Tag, (Raw, String)> {
             Ok(if raw.name == "function" {
                 Tag::Function { path, description }
             } else {
-                Tag::Table { path, is_local: false, description }
+                Tag::Table { path, description }
             })
         }
         "field" | "global" => {

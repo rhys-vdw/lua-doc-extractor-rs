@@ -1,9 +1,9 @@
-//! Turns the docs of one output file into Lua.
+//! Renders a library as the text of one Lua file.
 
-use std::collections::{HashMap, HashSet};
-
-use crate::doc::{Doc, Raw, Source, Tag};
-use crate::name::Path;
+use crate::decl::{Comment, Field};
+use crate::doc::Source;
+use crate::library::Item;
+use crate::text::{join, lua_comment, trimmed};
 
 /// Options that affect the generated text.
 #[derive(Debug, Clone, Default)]
@@ -12,14 +12,8 @@ pub struct Options {
     pub repo: Option<String>,
 }
 
-pub fn emit(docs: Vec<Doc>, sources: &[String], options: &Options) -> String {
-    let docs = expand_functions(docs);
-    let docs = attach_field_descriptions(docs);
-    let docs = add_tables(docs);
-    let docs = move_enum_fields(docs);
-    let docs = merge_tables(docs);
-
-    let body: Vec<String> = docs.iter().map(|doc| render_doc(doc, options)).filter(|s| !s.is_empty()).collect();
+pub fn emit(items: &[Item], sources: &[String], options: &Options) -> String {
+    let body: Vec<String> = items.iter().map(|item| render_item(item, options)).filter(|s| !s.is_empty()).collect();
     format!("{}\n\n{}\n", header(sources), body.join("\n\n"))
 }
 
@@ -40,268 +34,72 @@ fn header(sources: &[String]) -> String {
         }
     }
     lines.push("@meta".to_string());
-    comment(&lines, "")
+    lua_comment(&lines, "")
 }
 
-/// A doc with several `@function` tags becomes one doc per function.
-fn expand_functions(docs: Vec<Doc>) -> Vec<Doc> {
-    docs.into_iter()
-        .flat_map(|doc| {
-            let functions: Vec<Tag> =
-                doc.tags.iter().filter(|t| matches!(t, Tag::Function { .. })).cloned().collect();
-            if functions.len() <= 1 {
-                return vec![doc];
-            }
-            let others: Vec<Tag> =
-                doc.tags.iter().filter(|t| !matches!(t, Tag::Function { .. })).cloned().collect();
-            functions
-                .into_iter()
-                .map(|f| Doc { tags: [others.clone(), vec![f]].concat(), ..doc.clone() })
-                .collect()
-        })
-        .collect()
-}
-
-/// Text directly above a generated `@field` is its description, as emmylua reads a
-/// description above `@field`. In a class the text is kept in place for emmylua instead.
-fn attach_field_descriptions(mut docs: Vec<Doc>) -> Vec<Doc> {
-    for doc in &mut docs {
-        if doc.tags.iter().any(|t| matches!(t, Tag::Class { .. })) {
-            continue;
+fn render_item(item: &Item, options: &Options) -> String {
+    match item {
+        Item::Function { path, params, comment, source } => {
+            with_comment(comment, source, options, format!("function {path}({}) end", params.join(", ")))
         }
-        let mut tags: Vec<Tag> = Vec::new();
-        for tag in std::mem::take(&mut doc.tags) {
-            match (tags.last(), tag) {
-                (Some(Tag::Text(_)), Tag::Field { path, mut typed, raw, source }) => {
-                    let Some(Tag::Text(above)) = tags.pop() else { unreachable!() };
-                    let inline = std::mem::take(&mut typed.description);
-                    typed.description = trimmed(above);
-                    join(&mut typed.description, inline);
-                    tags.push(Tag::Field { path, typed, raw, source });
-                }
-                (_, tag) => tags.push(tag),
-            }
-        }
-        doc.tags = tags;
-    }
-    docs
-}
-
-/// Classes generate a local table, and enums a global one.
-fn add_tables(mut docs: Vec<Doc>) -> Vec<Doc> {
-    for doc in &mut docs {
-        if doc.tags.iter().any(|t| matches!(t, Tag::Table { .. })) {
-            continue;
-        }
-        let table = doc.tags.iter().find_map(|t| match t {
-            Tag::Class { path, .. } => Some((path.clone(), true)),
-            Tag::Enum { path, .. } => Some((path.clone(), false)),
-            _ => None,
-        });
-        if let Some((path, is_local)) = table {
-            doc.tags.push(Tag::Table { path, is_local, description: vec![] });
-        }
-    }
-    docs
-}
-
-/// `@field Enum.NAME` in another doc becomes a field of the enum's table.
-fn move_enum_fields(mut docs: Vec<Doc>) -> Vec<Doc> {
-    let enums: HashSet<String> = docs
-        .iter()
-        .flat_map(|d| &d.tags)
-        .filter_map(|t| match t {
-            Tag::Enum { path, .. } => Some(path.to_string()),
-            _ => None,
-        })
-        .collect();
-
-    for doc in &mut docs {
-        let mut tables: Vec<Path> = Vec::new();
-        for tag in &mut doc.tags {
-            let Tag::Field { path, typed, .. } = tag else { continue };
-            let Some(parent) = path.parent().filter(|p| enums.contains(&p.to_string())) else {
-                continue;
-            };
-            *path = path.last();
-            join(&mut typed.description, doc.description.clone());
-            if !tables.contains(&parent) {
-                tables.push(parent);
-            }
-        }
-        if !tables.is_empty() {
-            doc.description.clear();
-            doc.tags.extend(tables.into_iter().map(|path| Tag::Table { path, is_local: false, description: vec![] }));
-        }
-    }
-    docs
-}
-
-/// Docs that generate the same table are merged into the first.
-fn merge_tables(docs: Vec<Doc>) -> Vec<Doc> {
-    let mut result: Vec<Doc> = Vec::new();
-    let mut by_table: HashMap<String, usize> = HashMap::new();
-
-    for doc in docs {
-        let table = doc.tags.iter().position(|t| matches!(t, Tag::Table { .. }));
-        let Some(table) = table else {
-            result.push(doc);
-            continue;
-        };
-        let Tag::Table { path, description, .. } = &doc.tags[table] else { unreachable!() };
-        let key = path.to_string();
-        match by_table.get(&key) {
-            Some(&i) => {
-                let prev = &mut result[i];
-                join(&mut prev.description, doc.description.clone());
-                join(&mut prev.description, description.clone());
-                prev.tags.extend(doc.tags.into_iter().enumerate().filter(|(j, _)| *j != table).map(|(_, t)| t));
-            }
-            None => {
-                by_table.insert(key, result.len());
-                result.push(doc);
-            }
-        }
-    }
-    result
-}
-
-fn render_doc(doc: &Doc, options: &Options) -> String {
-    let is_class = doc.tags.iter().any(|t| matches!(t, Tag::Class { .. }));
-    // `@enum` goes first, so emmylua attaches the tags that follow it to the enum.
-    let mut ordered: Vec<&Tag> = doc.tags.iter().filter(|t| matches!(t, Tag::Enum { .. })).collect();
-    ordered.extend(doc.tags.iter().filter(|t| !matches!(t, Tag::Enum { .. })));
-    let mut description = doc.description.clone();
-    let mut tags: Vec<String> = Vec::new();
-    let mut lua: Vec<String> = Vec::new();
-    let mut fields: Vec<&Tag> = Vec::new();
-    let mut table: Option<(&Path, bool)> = None;
-
-    let params: Vec<&str> = doc
-        .tags
-        .iter()
-        .filter_map(|t| match t {
-            Tag::Param { name, .. } => Some(name.as_str()),
-            _ => None,
-        })
-        .collect();
-
-    for tag in ordered {
-        match tag {
-            Tag::Function { path, description: d } => {
-                join(&mut description, d.clone());
-                lua.push(format!("function {path}({}) end", params.join(", ")));
-            }
-            Tag::Table { path, is_local, description: d } => {
-                join(&mut description, d.clone());
-                table = Some((path, *is_local));
-            }
-            Tag::Field { raw, .. } if is_class => tags.extend(render_raw(raw)),
-            Tag::Field { .. } => fields.push(tag),
-            Tag::Enum { raw, .. } | Tag::Class { raw, .. } | Tag::Param { raw, .. } | Tag::Other(raw) => {
-                tags.extend(render_raw(raw))
-            }
-            Tag::Text(lines) => tags.extend(lines.iter().cloned()),
-        }
-    }
-
-    if let Some(link) = options.repo.as_deref().map(|repo| see_link(repo, &doc.source)) {
-        tags.push(link);
-    }
-
-    match table {
-        Some((path, is_local)) => {
-            let local = if is_local && path.segments.len() == 1 { "local " } else { "" };
-            if fields.is_empty() {
-                lua.push(format!("{local}{path} = {{}}"));
+        Item::Table { path, is_local, comment, fields, source } => {
+            let local = if *is_local { "local " } else { "" };
+            let body = if fields.is_empty() {
+                "{}".to_string()
             } else {
-                let body: Vec<String> = fields.iter().map(|f| render_field(f, "\t", options)).collect();
-                lua.push(format!("{local}{path} = {{\n{}\n}}", body.join(",\n\n")));
-            }
+                let fields: Vec<String> = fields.iter().map(|f| render_field(f, "\t", options)).collect();
+                format!("{{\n{}\n}}", fields.join(",\n\n"))
+            };
+            with_comment(comment, source, options, format!("{local}{path} = {body}"))
         }
-        None => lua.extend(fields.iter().map(|f| render_field(f, "", options))),
+        Item::Field(field) => render_field(field, "", options),
+        Item::Comment { comment, source } => lua_comment(&comment_lines(comment, source, options), ""),
     }
-
-    let mut text = Vec::new();
-    let description = trimmed(description);
-    if !description.is_empty() {
-        text.push(description);
-    }
-    if !tags.is_empty() {
-        text.push(tags);
-    }
-    let comment_lines: Vec<String> = text.join(&String::new());
-    let mut out = comment(&comment_lines, "");
-    for chunk in lua {
-        if !out.is_empty() {
-            out.push('\n');
-        }
-        out.push_str(&chunk);
-    }
-    out
 }
 
-fn render_field(tag: &Tag, indent: &str, options: &Options) -> String {
-    let Tag::Field { path, typed, source, .. } = tag else { unreachable!() };
-    let mut lines = typed.description.clone();
-    let value = match &typed.literal {
+/// `---description`, a blank line, `---@tags`, then `code`.
+fn with_comment(comment: &Comment, source: &Source, options: &Options, code: String) -> String {
+    let lines = comment_lines(comment, source, options);
+    if lines.is_empty() { code } else { format!("{}\n{code}", lua_comment(&lines, "")) }
+}
+
+fn comment_lines(comment: &Comment, source: &Source, options: &Options) -> Vec<String> {
+    let mut lines = trimmed(comment.description.clone());
+    let mut tags = comment.tags.clone();
+    tags.extend(see_link(source, options));
+    if !tags.is_empty() {
+        if !lines.is_empty() {
+            lines.push(String::new());
+        }
+        lines.extend(tags);
+    }
+    lines
+}
+
+/// A literal becomes the value (`STOP = 0`); any other type becomes `---@type` and `nil`.
+fn render_field(field: &Field, indent: &str, options: &Options) -> String {
+    let mut lines = field.typed.description.clone();
+    let value = match &field.typed.literal {
         Some(literal) => literal.clone(),
         None => {
-            let mut ty = typed.ty.clone();
+            let mut ty = field.typed.ty.clone();
             ty[0] = format!("@type {}", ty[0]).trim_end().to_string();
             join(&mut lines, ty);
             "nil".to_string()
         }
     };
-    if let Some(repo) = &options.repo {
-        lines.push(see_link(repo, source));
-    }
-    let code = format!("{indent}{path} = {value}");
-    let comment = comment(&trimmed(lines), indent);
-    if comment.is_empty() { code } else { format!("{comment}\n{code}") }
-}
-
-fn render_raw(raw: &Raw) -> Vec<String> {
-    let mut lines = raw.lines.clone();
-    while lines.len() > 1 && lines.last().is_some_and(|l| l.trim().is_empty()) {
-        lines.pop();
-    }
-    lines[0] = format!("@{} {}", raw.name, lines[0]).trim_end().to_string();
-    lines
+    let mut lines = trimmed(lines);
+    lines.extend(field.comment.tags.iter().cloned());
+    lines.extend(see_link(&field.source, options));
+    let code = format!("{indent}{} = {value}", field.path);
+    if lines.is_empty() { code } else { format!("{}\n{code}", lua_comment(&lines, indent)) }
 }
 
 /// `@see [LuaSyncedRead.cpp#L10-L20](<repo>/rts/Lua/LuaSyncedRead.cpp#L10-L20)`
-fn see_link(repo: &str, source: &Source) -> String {
+fn see_link(source: &Source, options: &Options) -> Option<String> {
+    let repo = options.repo.as_deref()?;
     let file = source.path.rsplit('/').next().unwrap_or(&source.path);
     let lines = format!("#L{}-L{}", source.start.line, source.end.line);
     let base = repo.trim_end_matches('/');
-    format!("@see [{file}{lines}]({base}/{}{lines})", source.path)
-}
-
-/// Appends `src` to `dest` as a new paragraph.
-fn join(dest: &mut Vec<String>, src: Vec<String>) {
-    let src = trimmed(src);
-    if src.is_empty() {
-        return;
-    }
-    *dest = trimmed(std::mem::take(dest));
-    if !dest.is_empty() {
-        dest.push(String::new());
-    }
-    dest.extend(src);
-}
-
-/// Removes leading and trailing blank lines.
-fn trimmed(mut lines: Vec<String>) -> Vec<String> {
-    while lines.first().is_some_and(|l| l.trim().is_empty()) {
-        lines.remove(0);
-    }
-    while lines.last().is_some_and(|l| l.trim().is_empty()) {
-        lines.pop();
-    }
-    lines
-}
-
-fn comment(lines: &[String], indent: &str) -> String {
-    lines.iter().map(|l| format!("{indent}---{l}")).collect::<Vec<_>>().join("\n")
+    Some(format!("@see [{file}{lines}]({base}/{}{lines})", source.path))
 }
