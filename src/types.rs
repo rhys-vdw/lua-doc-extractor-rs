@@ -49,7 +49,7 @@ pub fn parse_type(lines: &[&str]) -> Result<Typed, String> {
     let end = locate(lines, usize::from(range.end()));
     if start.0 == 0 {
         // A type on the tag's line starts at its first character. The node can start later:
-        // the `(` of `(A|B)?` isn't part of it.
+        // the `(` of `(A|B)?` isn't part of it (workaround H, UPSTREAM.md #14).
         start.1 = lines[0].len() - lines[0].trim_start().len();
     }
 
