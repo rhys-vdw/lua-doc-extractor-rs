@@ -1,0 +1,22 @@
+[package]
+name = "lua-doc-extractor"
+version = "4.0.0-alpha.0"
+edition = "2024"
+description = "Generates an emmylua library from Lua doc comments in C++ source"
+license = "MIT"
+repository = "https://github.com/rhys-vdw/lua-doc-extractor-rs"
+publish = false
+
+[lib]
+name = "lua_doc_extractor"
+
+[[bin]]
+name = "lua-doc-extractor"
+path = "src/main.rs"
+
+[dependencies]
+emmylua_parser = "=0.29.1"
+rowan = "0.17"
+
+[dev-dependencies]
+emmylua_doc_cli = "=0.25.1"
