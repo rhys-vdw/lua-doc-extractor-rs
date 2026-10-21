@@ -22,21 +22,34 @@ fn standalone_field() {
     insta::assert_snapshot!(lib.body());
 }
 
-/// The field's inline description runs on over the lines below it, blank lines included.
+/// The global's inline description runs on over the lines below it, blank lines included.
+/// (v3's version of this test used `@field foo`, which v4 no longer accepts as a global.)
 #[test]
-fn standalone_field_with_doc_description() {
+fn global_with_doc_description() {
     let lib = extract(
         r#"
         /***
          * Some description.
          *
-         * @field foo number More.
+         * @global foo number More.
          *
          * Some more.
          */
         "#,
     );
     insta::assert_snapshot!(lib.body());
+}
+
+/// A global is declared with `@global`. A `@field` needs a table.
+#[test]
+fn field_without_a_table_is_an_error() {
+    let lib = extract_reporting("", "/*** @field foo number A global? */");
+    let [d] = lib.diagnostics.as_slice() else {
+        panic!("expected one error, found {:#?}", lib.diagnostics);
+    };
+    assert_eq!(d.severity, Severity::Error, "{d:#?}");
+    assert!(d.message.contains("use `@global foo`") || d.message.contains("`@global foo`"));
+    assert_eq!(lib.body(), "");
 }
 
 #[test]

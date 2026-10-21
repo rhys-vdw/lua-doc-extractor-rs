@@ -5,6 +5,7 @@
 
 use crate::doc::{Diagnostic, Doc, Raw, Severity, Source, Tag};
 use crate::name::Path;
+use crate::scan::Pos;
 use crate::text::{Line, join, trimmed};
 use crate::types::Typed;
 
@@ -81,12 +82,14 @@ pub fn interpret(doc: Doc, diagnostics: &mut Vec<Diagnostic>) -> Vec<Decl> {
         tags,
     } = doc;
     let is_class = tags.iter().any(|t| matches!(t, Tag::Class { .. }));
+    let has_tags = tags.iter().any(|t| !matches!(t, Tag::Text(_)));
 
     let mut functions: Vec<(Path, Vec<Line>, Option<usize>)> = Vec::new();
     let mut table: Option<(Path, Vec<Line>, Option<usize>)> = None;
     let mut enum_: Option<(Path, Vec<Line>)> = None;
     let mut class: Option<(Path, Option<usize>)> = None;
-    let mut fields: Vec<Field> = Vec::new();
+    // Each field, and whether it's a `@global`.
+    let mut fields: Vec<(Field, bool)> = Vec::new();
     let mut params: Vec<String> = Vec::new();
     // Tags (and free text) in order, for the comment above the declaration.
     let mut lines: Vec<Line> = Vec::new();
@@ -137,13 +140,14 @@ pub fn interpret(doc: Doc, diagnostics: &mut Vec<Diagnostic>) -> Vec<Decl> {
                     typed.description = trimmed(above);
                     join(&mut typed.description, inline);
                 }
-                fields.push(Field {
+                let field = Field {
                     path,
                     typed,
                     comment: Comment::default(),
                     source: field_source,
                     line: raw.lines[0].src,
-                });
+                };
+                fields.push((field, raw.name == "global"));
             }
             Tag::Param { name, raw } => {
                 params.push(name);
@@ -219,6 +223,27 @@ pub fn interpret(doc: Doc, diagnostics: &mut Vec<Diagnostic>) -> Vec<Decl> {
         });
     }
 
+    // A `@field` needs a table: its own (`@field Table.name`), or the doc's enum or table.
+    // A global is declared with `@global`, so there's one way to do it.
+    let fields: Vec<Field> = fields
+        .into_iter()
+        .filter_map(|(field, is_global)| {
+            if is_global || owner.is_some() || field.path.segments.len() > 1 {
+                return Some(field);
+            }
+            diagnostics.push(Diagnostic {
+                severity: Severity::Error,
+                path: source.path.clone(),
+                pos: field_pos(&source, field.line),
+                message: format!(
+                    "@field {} has no table; declare a global with `@global {}`",
+                    field.path, field.path
+                ),
+            });
+            None
+        })
+        .collect();
+
     // A doc that only declares fields gives them its description and tags. Free text
     // that isn't directly above a field stays unattached, as emmylua reads it.
     let fields_only = decls.is_empty() && !fields.is_empty();
@@ -251,7 +276,7 @@ pub fn interpret(doc: Doc, diagnostics: &mut Vec<Diagnostic>) -> Vec<Decl> {
     }
 
     if decls.is_empty() {
-        if lines.is_empty() {
+        if !has_tags {
             diagnostics.push(Diagnostic {
                 severity: Severity::Warning,
                 path: source.path.clone(),
@@ -265,6 +290,14 @@ pub fn interpret(doc: Doc, diagnostics: &mut Vec<Diagnostic>) -> Vec<Decl> {
         });
     }
     decls
+}
+
+/// The position of a tag's line, for a diagnostic: its line, or the doc's start.
+fn field_pos(source: &Source, line: Option<usize>) -> Pos {
+    match line {
+        Some(line) => Pos { line, col: 1 },
+        None => source.start,
+    }
 }
 
 /// A tag as Lua comment lines, without trailing blank lines.
