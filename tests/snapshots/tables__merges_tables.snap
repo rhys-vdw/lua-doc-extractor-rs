@@ -1,0 +1,18 @@
+---
+source: tests/tables.rs
+expression: lib.body()
+---
+---Foo description.
+---
+---Additional.
+Foo = {
+	---This is foo.
+	---
+	---@type integer
+	foo = nil,
+
+	---This is bar.
+	---
+	---@type string
+	bar = nil
+}

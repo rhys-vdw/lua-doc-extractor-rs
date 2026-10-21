@@ -1,0 +1,16 @@
+---
+source: tests/tables.rs
+expression: lib.body()
+---
+---My table.
+TheTable = {
+	---This is foo.
+	---
+	---@type integer
+	foo = nil,
+
+	---This is bar.
+	---
+	---@type string
+	bar = nil
+}

@@ -1,0 +1,8 @@
+---
+source: tests/classes.rs
+expression: lib.body()
+---
+---@class Example
+---@field ["hello"] "world" World.
+---@field ["foo"] integer A number.
+local Example = {}

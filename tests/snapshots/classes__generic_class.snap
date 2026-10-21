@@ -1,0 +1,8 @@
+---
+source: tests/classes.rs
+expression: lib.body()
+---
+---A table of uniform name to value.
+---
+---@class UniformParam<T> : { [string]: T|T[] }
+local UniformParam = {}

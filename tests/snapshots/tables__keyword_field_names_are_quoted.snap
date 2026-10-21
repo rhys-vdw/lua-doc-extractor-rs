@@ -1,0 +1,16 @@
+---
+source: tests/tables.rs
+expression: lib.body()
+---
+---Cool table.
+CoolTable = {
+	---The value.
+	---
+	---@type integer
+	value = nil,
+
+	---Should this repeat?
+	---
+	---@type boolean
+	["repeat"] = nil
+}

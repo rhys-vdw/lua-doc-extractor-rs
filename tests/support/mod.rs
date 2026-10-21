@@ -153,16 +153,21 @@ impl Lib {
     }
 
     /// The table or type named `name` that holds members. A global typed as a class
-    /// (`---@class Foo` + `Foo = {}`) has its members on the class.
+    /// (`---@class Foo` + `foo = {}`) has its members on the class.
     fn owner(&self, name: &str) -> Option<&Value> {
         let globals = self.doc["globals"].as_array().into_iter().flatten();
         let mut candidates = globals.chain(self.types()).filter(|v| v["name"] == name);
         let first = candidates.next()?;
         if first["members"].is_array() {
-            Some(first)
-        } else {
-            candidates.next().or(Some(first))
+            return Some(first);
         }
+        if let Some(other) = candidates.next() {
+            return Some(other);
+        }
+        let class = first["typ"]
+            .as_str()
+            .and_then(|t| self.types().find(|v| v["name"] == t));
+        class.or(Some(first))
     }
 
     fn members(&self, owner: &str) -> impl Iterator<Item = &Value> {

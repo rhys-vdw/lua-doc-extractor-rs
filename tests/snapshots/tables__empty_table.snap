@@ -1,0 +1,6 @@
+---
+source: tests/tables.rs
+expression: lib.body()
+---
+---My empty table.
+Empty = {}

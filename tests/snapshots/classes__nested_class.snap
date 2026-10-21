@@ -1,0 +1,7 @@
+---
+source: tests/classes.rs
+expression: lib.body()
+---
+---@class Foo.Bar
+---@field a Foo.Bar
+Foo.Bar = {}

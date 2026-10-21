@@ -1,0 +1,18 @@
+---
+source: tests/tables.rs
+expression: lib.body()
+---
+---Foo description.
+---
+---Additional.
+---
+---Second.
+---
+---@class Foo First.
+---@field foo integer This is foo.
+local Foo = {
+	---This is bar.
+	---
+	---@type string
+	bar = nil
+}

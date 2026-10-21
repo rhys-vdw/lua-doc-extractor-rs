@@ -1,0 +1,11 @@
+---
+source: tests/classes.rs
+expression: lib.body()
+---
+---@class ControlPoint
+---NURBS control point.
+---@field [1] number x
+---@field [2] number y
+---@field [3] number z
+---@field [4] number weight
+local ControlPoint = {}

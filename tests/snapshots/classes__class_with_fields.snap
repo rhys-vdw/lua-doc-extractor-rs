@@ -1,0 +1,10 @@
+---
+source: tests/classes.rs
+expression: lib.body()
+---
+---@class Car
+---@field doorCount integer
+---@field maxSpeed number How fast can this baby go?
+---@field make string The manufacter.
+---@field model string The model of the car.
+local Car = {}

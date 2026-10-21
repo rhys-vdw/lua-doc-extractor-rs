@@ -1,0 +1,9 @@
+---
+source: tests/classes.rs
+expression: lib.body()
+---
+---@class Example
+---@field [string] number A named key type.
+---@field [ CustomKey ] string A custom key type.
+---@field [intger] boolean An unvalidated key type.
+local Example = {}

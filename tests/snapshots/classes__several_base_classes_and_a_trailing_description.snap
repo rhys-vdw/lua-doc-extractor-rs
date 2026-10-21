@@ -1,0 +1,10 @@
+---
+source: tests/classes.rs
+expression: lib.body()
+---
+---Here's a description...
+---
+---@class Foo : Bar, Baz, table<string, number>, (A|B) A bit more...
+---
+---Another line!
+local Foo = {}

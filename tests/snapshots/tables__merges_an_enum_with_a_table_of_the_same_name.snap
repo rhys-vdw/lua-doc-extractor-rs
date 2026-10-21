@@ -1,0 +1,16 @@
+---
+source: tests/tables.rs
+expression: lib.body()
+---
+---Foo description.
+---
+---Additional.
+---
+---Second.
+---
+---@enum Foo First.
+Foo = {
+	FIVE = 5,
+
+	SIX = 6
+}

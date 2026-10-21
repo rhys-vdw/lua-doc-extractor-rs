@@ -1,0 +1,8 @@
+---
+source: tests/classes.rs
+expression: lib.body()
+---
+---@class Foo
+---@field disabled boolean
+---@field name string
+local Foo = {}

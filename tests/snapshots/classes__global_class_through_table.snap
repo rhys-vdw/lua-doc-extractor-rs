@@ -1,0 +1,10 @@
+---
+source: tests/classes.rs
+expression: lib.body()
+---
+---@class Widget
+---@field a integer
+widget = {}
+
+---@param b integer
+function widget.Foo(b) end
