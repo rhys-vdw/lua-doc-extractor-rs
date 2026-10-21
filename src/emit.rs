@@ -14,6 +14,7 @@ pub struct Options {
 
 pub fn emit(docs: Vec<Doc>, sources: &[String], options: &Options) -> String {
     let docs = expand_functions(docs);
+    let docs = attach_field_descriptions(docs);
     let docs = add_tables(docs);
     let docs = move_enum_fields(docs);
     let docs = merge_tables(docs);
@@ -59,6 +60,31 @@ fn expand_functions(docs: Vec<Doc>) -> Vec<Doc> {
                 .collect()
         })
         .collect()
+}
+
+/// Text directly above a generated `@field` is its description, as emmylua reads a
+/// description above `@field`. In a class the text is kept in place for emmylua instead.
+fn attach_field_descriptions(mut docs: Vec<Doc>) -> Vec<Doc> {
+    for doc in &mut docs {
+        if doc.tags.iter().any(|t| matches!(t, Tag::Class { .. })) {
+            continue;
+        }
+        let mut tags: Vec<Tag> = Vec::new();
+        for tag in std::mem::take(&mut doc.tags) {
+            match (tags.last(), tag) {
+                (Some(Tag::Text(_)), Tag::Field { path, mut typed, raw, source }) => {
+                    let Some(Tag::Text(above)) = tags.pop() else { unreachable!() };
+                    let inline = std::mem::take(&mut typed.description);
+                    typed.description = trimmed(above);
+                    join(&mut typed.description, inline);
+                    tags.push(Tag::Field { path, typed, raw, source });
+                }
+                (_, tag) => tags.push(tag),
+            }
+        }
+        doc.tags = tags;
+    }
+    docs
 }
 
 /// Classes generate a local table, and enums a global one.
@@ -175,6 +201,7 @@ fn render_doc(doc: &Doc, options: &Options) -> String {
             Tag::Enum { raw, .. } | Tag::Class { raw, .. } | Tag::Param { raw, .. } | Tag::Other(raw) => {
                 tags.extend(render_raw(raw))
             }
+            Tag::Text(lines) => tags.extend(lines.iter().cloned()),
         }
     }
 

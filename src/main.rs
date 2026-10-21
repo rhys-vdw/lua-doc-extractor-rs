@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use clap::Parser;
-use lua_doc_extractor::{Options, extract, scan::scan};
+use lua_doc_extractor::{Options, doc::Severity, extract, scan::scan};
 
 /// Extracts Lua docs from C-style comments.
 #[derive(Parser)]
@@ -63,9 +63,13 @@ fn main() -> ExitCode {
 
         let (lua, diagnostics) = extract(&path, &source, &options);
         for d in &diagnostics {
-            eprintln!("{}:{}:{}: error: {}", d.path, d.pos.line, d.pos.col, d.message);
+            let severity = match d.severity {
+                Severity::Error => "error",
+                Severity::Warning => "warning",
+            };
+            eprintln!("{}:{}:{}: {severity}: {}", d.path, d.pos.line, d.pos.col, d.message);
         }
-        error_count += diagnostics.len();
+        error_count += diagnostics.iter().filter(|d| d.severity == Severity::Error).count();
 
         let out = args.dest.join(format!("{path}.lua"));
         if let Some(parent) = out.parent() {
