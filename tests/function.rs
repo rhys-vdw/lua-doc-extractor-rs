@@ -149,3 +149,47 @@ fn global_function() {
         lib.lua
     );
 }
+
+#[test]
+fn nested_table_function() {
+    let lib = extract_with("Foo = { Bar = {} }", "/*** @function Foo.Bar.baz */");
+    insta::assert_snapshot!(lib.body());
+}
+
+#[test]
+fn variadic_return() {
+    let lib = extract_with(
+        "Returner = {}",
+        r#"
+        /***
+         * @function Returner.returner
+         * @return integer ...
+         */
+        "#,
+    );
+    insta::assert_snapshot!(lib.body());
+}
+
+/// lua-doc-extractor#78: several `@function` tags in one doc each get the whole doc.
+#[test]
+fn several_methods_share_one_doc() {
+    let lib = extract_with(
+        "---@class Gadget\nGadget = {}\n---@class Widget\nWidget = {}",
+        r#"
+        /***
+         * Example callin.
+         *
+         * @function Gadget:SomeCallin
+         * @function Widget:SomeCallin
+         *
+         * @param unitID integer
+         */
+        "#,
+    );
+    for name in ["Gadget:SomeCallin", "Widget:SomeCallin"] {
+        let f = lib.function(name);
+        f.has_description("Example callin.");
+        f.param("unitID").has_type("integer");
+    }
+    insta::assert_snapshot!(lib.body());
+}

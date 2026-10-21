@@ -1,0 +1,6 @@
+---
+source: tests/function.rs
+expression: lib.body()
+---
+---@return integer ...
+function Returner.returner() end

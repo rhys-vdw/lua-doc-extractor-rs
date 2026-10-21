@@ -1,0 +1,7 @@
+---
+source: tests/comments.rs
+expression: lib.body()
+---
+---@param s string
+---@return? boolean
+function LDocTable.LDoc(s) end

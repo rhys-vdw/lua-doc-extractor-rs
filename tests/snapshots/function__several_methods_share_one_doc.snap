@@ -1,0 +1,13 @@
+---
+source: tests/function.rs
+expression: lib.body()
+---
+---Example callin.
+---
+---@param unitID integer
+function Gadget:SomeCallin(unitID) end
+
+---Example callin.
+---
+---@param unitID integer
+function Widget:SomeCallin(unitID) end

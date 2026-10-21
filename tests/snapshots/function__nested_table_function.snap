@@ -1,0 +1,5 @@
+---
+source: tests/function.rs
+expression: lib.body()
+---
+function Foo.Bar.baz() end

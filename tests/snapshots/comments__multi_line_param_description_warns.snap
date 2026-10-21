@@ -1,0 +1,9 @@
+---
+source: tests/comments.rs
+expression: lib.body()
+---
+---@param options string? concatenated string of option characters.
+---
+---  - horizontal alignment:
+---    - 'c' = center
+function gl.Text(options) end

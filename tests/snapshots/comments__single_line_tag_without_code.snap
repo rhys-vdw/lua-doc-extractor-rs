@@ -1,0 +1,5 @@
+---
+source: tests/comments.rs
+expression: lib.body()
+---
+---@deprecated

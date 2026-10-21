@@ -91,7 +91,17 @@ pub fn parse_doc(path: &str, block: &Block, diagnostics: &mut Vec<Diagnostic>) -
         })
     };
     for (line, message) in &parsed.errors {
-        report(Severity::Error, *line, message.clone());
+        // Name the tag the error is in, since emmylua's messages don't.
+        let tag = parsed
+            .items
+            .iter()
+            .find(|i| i.kind == ItemKind::Tag && (i.start..=i.end).contains(line))
+            .and_then(|i| tag_start(&block.lines[i.start].text));
+        let message = match tag {
+            Some((name, _)) => format!("in @{name}: {message}"),
+            None => message.clone(),
+        };
+        report(Severity::Error, *line, message);
     }
 
     let mut description = Vec::new();

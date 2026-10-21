@@ -1,0 +1,10 @@
+---
+source: tests/comments.rs
+expression: lib.body()
+---
+---@see [test.cpp#L1-L3](https://github.com/rhys-vdw/lua-doc-extractor/blob/main/test.cpp#L1-L3)
+MyTable = {}
+
+---@param x number
+---@see [test.cpp#L5-L8](https://github.com/rhys-vdw/lua-doc-extractor/blob/main/test.cpp#L5-L8)
+function MyTable.Boop(x) end

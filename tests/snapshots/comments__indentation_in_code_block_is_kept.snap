@@ -1,0 +1,11 @@
+---
+source: tests/comments.rs
+expression: lib.body()
+---
+---```lua
+---for i = 1, #teams do
+---  if teams[i] ~= teamID and not select(2, Spring.GetTeamInfo(teams[i], false)) then
+---  aliveTeams = aliveTeams + 1
+---end
+---```
+function Foo() end
