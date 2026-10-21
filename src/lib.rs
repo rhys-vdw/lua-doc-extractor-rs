@@ -29,5 +29,5 @@ pub fn extract(path: &str, source: &str, options: &Options) -> (String, Vec<Diag
         .collect();
     let decls = docs.into_iter().flat_map(|doc| decl::interpret(doc, &mut diagnostics)).collect();
     let items = library::resolve(decls);
-    (emit::emit(&items, &[path.to_string()], options), diagnostics)
+    (emit::emit(&items, options), diagnostics)
 }
