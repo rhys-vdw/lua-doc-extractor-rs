@@ -4,7 +4,7 @@
 use crate::decl::{Comment, Field};
 use crate::doc::Source;
 use crate::library::Item;
-use crate::text::{Line, commented, join, trimmed};
+use crate::text::{Line, Src, commented, join, trimmed};
 
 /// Options that affect the generated text.
 #[derive(Debug, Clone, Default)]
@@ -19,7 +19,7 @@ pub struct Rendered {
     pub lua: String,
     /// For each line of `lua`, the C++ line (1-based) it came from. Lines with no source,
     /// such as the header and blank lines, are `None`.
-    pub line_map: Vec<Option<usize>>,
+    pub line_map: Vec<Option<Src>>,
 }
 
 pub fn emit(items: &[Item], options: &Options) -> Rendered {
@@ -39,7 +39,7 @@ pub fn emit(items: &[Item], options: &Options) -> Rendered {
     lua.push('\n');
     Rendered {
         lua,
-        line_map: lines.iter().map(|l| l.src).collect(),
+        line_map: lines.iter().map(|l| l.src.clone()).collect(),
     }
 }
 
@@ -70,7 +70,12 @@ fn render_item(item: &Item, options: &Options) -> Vec<Line> {
             line,
         } => {
             let code = format!("function {path}({}) end", params.join(", "));
-            with_comment(comment, source, options, vec![Line::new(code, *line)])
+            with_comment(
+                comment,
+                source,
+                options,
+                vec![Line::new(code, line.clone())],
+            )
         }
         Item::Table {
             path,
@@ -82,9 +87,9 @@ fn render_item(item: &Item, options: &Options) -> Vec<Line> {
         } => {
             let local = if *is_local { "local " } else { "" };
             let code = if fields.is_empty() {
-                vec![Line::new(format!("{local}{path} = {{}}"), *line)]
+                vec![Line::new(format!("{local}{path} = {{}}"), line.clone())]
             } else {
-                let mut code = vec![Line::new(format!("{local}{path} = {{"), *line)];
+                let mut code = vec![Line::new(format!("{local}{path} = {{"), line.clone())];
                 for (i, field) in fields.iter().enumerate() {
                     if i > 0 {
                         code.push(Line::generated(""));
@@ -97,7 +102,7 @@ fn render_item(item: &Item, options: &Options) -> Vec<Line> {
                     }
                     code.extend(field);
                 }
-                code.push(Line::new("}", *line));
+                code.push(Line::new("}", line.clone()));
                 code
             };
             with_comment(comment, source, options, code)
@@ -169,7 +174,7 @@ fn render_field(field: &Field, in_table: InTable, options: &Options) -> Vec<Line
     let mut out = commented(lines, indent);
     out.push(Line::new(
         format!("{indent}{} = {value}", field.path),
-        field.line,
+        field.line.clone(),
     ));
     out
 }
@@ -182,5 +187,8 @@ fn see_link(source: &Source, options: &Options) -> Option<Line> {
     let lines = format!("#L{}-L{}", source.start.line, source.end.line);
     let base = repo.trim_end_matches('/');
     let text = format!("@see [{file}{lines}]({base}/{}{lines})", source.path);
-    Some(Line::new(text, Some(source.start.line)))
+    Some(Line::new(
+        text,
+        Some(Src::new(source.path.as_str(), source.start.line)),
+    ))
 }

@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet};
 use crate::decl::{Comment, Decl, Field, TypeKind};
 use crate::doc::Source;
 use crate::name::{Path, parse_path};
-use crate::text::Line;
+use crate::text::{Line, Src};
 
 #[derive(Debug, Clone)]
 pub enum Item {
@@ -17,7 +17,7 @@ pub enum Item {
         comment: Comment,
         fields: Vec<Field>,
         source: Source,
-        line: Option<usize>,
+        line: Option<Src>,
     },
     /// `Path.name = value`, outside any table declared here
     Field(Field),
@@ -27,7 +27,7 @@ pub enum Item {
         params: Vec<String>,
         comment: Comment,
         source: Source,
-        line: Option<usize>,
+        line: Option<Src>,
     },
     /// A comment with no code
     Comment { comment: Comment, source: Source },
@@ -141,7 +141,7 @@ fn add_table(
     (path, is_local): (Path, bool),
     comment: Comment,
     source: Source,
-    line: Option<usize>,
+    line: Option<Src>,
 ) {
     let key = path.to_string();
     match tables.get(&key) {

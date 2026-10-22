@@ -1,10 +1,8 @@
-use std::collections::BTreeMap;
 use std::path::{Component, Path, PathBuf};
 use std::process::ExitCode;
 
 use clap::Parser;
-use lua_doc_extractor::{Options, doc::Severity, env, extract_library, scan::scan};
-use serde_json::json;
+use lua_doc_extractor::{Options, doc::Severity, env, extract_library, scan::scan, source_map};
 
 /// Extracts Lua docs from C-style comments.
 #[derive(Parser)]
@@ -26,7 +24,7 @@ struct Args {
     #[arg(long)]
     error: bool,
 
-    /// Write a map from each generated line to its C++ line to this JSON file.
+    /// Write a map from each generated line to its C++ file and line to this JSON file.
     #[arg(long)]
     sourcemap: Option<PathBuf>,
 
@@ -45,11 +43,6 @@ fn main() -> ExitCode {
         for e in route_errors {
             eprintln!("error: {e}");
         }
-        return ExitCode::FAILURE;
-    }
-    // An output from `--env` mixes source files, and the source map has one source per output.
-    if args.sourcemap.is_some() && !routes.is_empty() {
-        eprintln!("error: --sourcemap can't be used with --env yet");
         return ExitCode::FAILURE;
     }
 
@@ -107,22 +100,16 @@ fn main() -> ExitCode {
         .filter(|d| d.severity == Severity::Error)
         .count();
 
-    let mut sourcemap = BTreeMap::new();
-    for output in outputs {
+    for output in &outputs {
         let out = args.dest.join(&output.name);
         if let Some(parent) = out.parent() {
             std::fs::create_dir_all(parent).expect("create output directory");
         }
         std::fs::write(&out, &output.rendered.lua).expect("write output");
-        sourcemap.insert(
-            output.name,
-            json!({ "source": output.sources[0], "lines": output.rendered.line_map }),
-        );
     }
 
     if let Some(file) = &args.sourcemap {
-        let json = json!({ "version": 1, "files": sourcemap });
-        let text = serde_json::to_string(&json).expect("serialise source map");
+        let text = serde_json::to_string(&source_map(&outputs)).expect("serialise source map");
         if let Some(parent) = file.parent() {
             std::fs::create_dir_all(parent).expect("create source map directory");
         }

@@ -4,7 +4,7 @@
 
 use crate::name::{Path, parse_path};
 use crate::scan::{Block, Pos};
-use crate::text::Line;
+use crate::text::{Line, Src};
 use crate::types::{Typed, parse_type};
 use emmylua_parser::{LuaParser, LuaSyntaxKind, ParserConfig};
 
@@ -63,14 +63,14 @@ pub enum Tag {
         path: Path,
         description: Vec<Line>,
         /// The tag's line.
-        line: Option<usize>,
+        line: Option<Src>,
     },
     /// `@table Name [description]`
     Table {
         path: Path,
         description: Vec<Line>,
         /// The tag's line.
-        line: Option<usize>,
+        line: Option<Src>,
     },
     /// `@field Table.name type [description]` or `@global name type [description]`.
     Field {
@@ -122,6 +122,7 @@ pub fn parse_doc(path: &str, block: &Block, diagnostics: &mut Vec<Diagnostic>) -
         end: block.end,
     };
     let parsed = split(block);
+    let file: std::rc::Rc<str> = path.into();
     let mut report = |severity, line: usize, message: String| {
         diagnostics.push(Diagnostic {
             severity,
@@ -137,7 +138,7 @@ pub fn parse_doc(path: &str, block: &Block, diagnostics: &mut Vec<Diagnostic>) -
     for (i, item) in parsed.items.iter().enumerate() {
         let mut lines: Vec<Line> = block.lines[item.start..=item.end]
             .iter()
-            .map(|l| Line::new(l.text.clone(), Some(l.pos.line)))
+            .map(|l| Line::new(l.text.clone(), Some(Src::new(file.clone(), l.pos.line))))
             .collect();
         while lines.len() > 1 && lines.last().is_some_and(Line::is_blank) {
             lines.pop();
@@ -147,7 +148,7 @@ pub fn parse_doc(path: &str, block: &Block, diagnostics: &mut Vec<Diagnostic>) -
             ItemKind::Text => tags.push(Tag::Text(lines)),
             ItemKind::Tag => {
                 let (name, rest) = tag_start(&lines[0].text).expect("a tag item starts with a tag");
-                let mut raw_lines = vec![Line::new(rest.trim_start(), lines[0].src)];
+                let mut raw_lines = vec![Line::new(rest.trim_start(), lines[0].src.clone())];
                 raw_lines.extend(lines[1..].iter().cloned());
                 let raw = Raw {
                     name: name.to_string(),
@@ -381,7 +382,7 @@ fn tag_start(text: &str) -> Option<(&str, &str)> {
 fn to_tag(raw: Raw, source: &Source) -> Result<Tag, (Raw, String)> {
     let first = raw.lines[0].text.clone();
     let first = first.as_str();
-    let line = raw.lines[0].src;
+    let line = raw.lines[0].src.clone();
     let fail = |raw: Raw, message: String| Err((raw, message));
 
     match raw.name.as_str() {
@@ -389,7 +390,7 @@ fn to_tag(raw: Raw, source: &Source) -> Result<Tag, (Raw, String)> {
             let Some((path, rest)) = parse_path(first) else {
                 return fail(raw.clone(), format!("expected a name after @{}", raw.name));
             };
-            let description = continuation(Line::new(rest, line), &raw.lines[1..]);
+            let description = continuation(Line::new(rest, line.clone()), &raw.lines[1..]);
             Ok(if raw.name == "function" {
                 Tag::Function {
                     path,

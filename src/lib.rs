@@ -24,6 +24,8 @@ use std::collections::{HashMap, HashSet};
 use doc::{Diagnostic, Doc, Severity, parse_doc};
 pub use emit::{Options, Rendered};
 use env::Routes;
+use serde_json::{Value, json};
+pub use text::Src;
 
 /// One generated Lua file.
 #[derive(Debug, Clone)]
@@ -111,6 +113,46 @@ pub fn extract_library(
         .collect();
     sort(&mut diagnostics);
     (outputs, diagnostics)
+}
+
+/// The source map: for each output, the C++ file and line each of its lines came from.
+///
+/// ```json
+/// { "version": 2,
+///   "files": { "<output>": { "sources": ["<path>", ...], "lines": [[<source>, <line>] | null, ...] } } }
+/// ```
+///
+/// `lines` has one entry per line of the output: an index into `sources` and a 1-based C++ line,
+/// or `null` for a generated line (the header, blank lines). An output made by `--env` can mix
+/// lines from several sources.
+pub fn source_map(outputs: &[Output]) -> Value {
+    let mut files = serde_json::Map::new();
+    for output in outputs {
+        let mut sources: Vec<&str> = Vec::new();
+        let lines: Vec<Value> = output
+            .rendered
+            .line_map
+            .iter()
+            .map(|src| match src {
+                Some(src) => {
+                    let i = sources
+                        .iter()
+                        .position(|s| *s == &*src.file)
+                        .unwrap_or_else(|| {
+                            sources.push(&src.file);
+                            sources.len() - 1
+                        });
+                    json!([i, src.line])
+                }
+                None => Value::Null,
+            })
+            .collect();
+        files.insert(
+            output.name.clone(),
+            json!({ "sources": sources, "lines": lines }),
+        );
+    }
+    json!({ "version": 2, "files": files })
 }
 
 /// A source file's docs, without empty ones.

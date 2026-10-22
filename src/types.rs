@@ -62,7 +62,7 @@ pub fn parse_type(input: &[Line]) -> Result<Typed, String> {
     let mut ty_lines = slice(input, start, end);
     if start.0 > 0 {
         // The type starts on a later line (a multi-line union).
-        ty_lines.insert(0, Line::new("", input[0].src));
+        ty_lines.insert(0, Line::new("", input[0].src.clone()));
     }
     let ty_text: Vec<&str> = ty_lines.iter().map(|l| l.text.as_str()).collect();
     let literal = is_literal(ty.syntax()).then(|| ty_text.join("\n"));
@@ -127,7 +127,7 @@ fn slice(lines: &[Line], start: (usize, usize), end: (usize, usize)) -> Vec<Line
             let text = &lines[i].text;
             let from = if i == start.0 { start.1 } else { 0 };
             let to = if i == end.0 { end.1 } else { text.len() };
-            Line::new(&text[from..to.max(from)], lines[i].src)
+            Line::new(&text[from..to.max(from)], lines[i].src.clone())
         })
         .collect()
 }
@@ -142,6 +142,7 @@ fn trim_lines(mut lines: Vec<Line>) -> Vec<Line> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::text::Src;
 
     /// Parses `s`, giving line `i` the source line `i + 1`.
     fn parse(s: &str) -> Typed {
@@ -151,7 +152,7 @@ mod tests {
     fn input(s: &str) -> Vec<Line> {
         s.split('\n')
             .enumerate()
-            .map(|(i, l)| Line::new(l, Some(i + 1)))
+            .map(|(i, l)| Line::new(l, Some(Src::new("test.cpp", i + 1))))
             .collect()
     }
 
@@ -203,7 +204,10 @@ mod tests {
         );
         // Each part keeps the source line of its text.
         assert_eq!(
-            t.description.iter().map(|l| l.src).collect::<Vec<_>>(),
+            t.description
+                .iter()
+                .map(|l| l.src.as_ref().map(|s| s.line))
+                .collect::<Vec<_>>(),
             [Some(3), Some(4), Some(5)]
         );
     }
