@@ -1,5 +1,6 @@
 # lua-doc-extractor _(lua-doc-extractor-rs)_
 
+[![crates.io](https://img.shields.io/crates/v/lua-doc-extractor.svg?style=flat-square)](https://crates.io/crates/lua-doc-extractor)
 [![standard-readme compliant](https://img.shields.io/badge/readme%20style-standard-brightgreen.svg?style=flat-square)](https://github.com/RichardLitt/standard-readme)
 
 Extracts EmmyLua docs from C-style comments.
