@@ -131,8 +131,8 @@ fn several_function_tags_share_one_doc() {
     }
 }
 
-/// emmylua's doc JSON has no params for global functions, so this only checks the generated
-/// Lua (workaround C, UPSTREAM.md #9).
+/// emmylua's doc JSON (emmylua_doc_cli 0.25.1) exports a global function as a field, with no
+/// params, returns or descriptions, so this only checks the generated Lua.
 #[test]
 fn global_function() {
     let lib = extract(

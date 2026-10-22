@@ -2,7 +2,8 @@
 //! emmylua's parser.
 //!
 //! `emmylua_parser` only makes whole-chunk parsing public, so the text is parsed as the body of a
-//! `---@type` tag. This is the only place that does so (workaround E, UPSTREAM.md #4).
+//! `---@type` tag. This is the only place that does so; a public entry point for parsing a type
+//! would replace it.
 
 use emmylua_parser::{LuaAstNode, LuaDocTagType, LuaParser, LuaSyntaxKind, ParserConfig};
 
@@ -53,7 +54,8 @@ pub fn parse_type(input: &[Line]) -> Result<Typed, String> {
     let end = locate(lines, usize::from(range.end()));
     if start.0 == 0 {
         // A type on the tag's line starts at its first character. The node can start later:
-        // the `(` of `(A|B)?` isn't part of it (workaround H, UPSTREAM.md #14).
+        // the `(` of `(A|B)?` isn't part of it, because emmylua_parser has no node for a
+        // parenthesised type.
         start.1 = lines[0].len() - lines[0].trim_start().len();
     }
 
@@ -65,7 +67,7 @@ pub fn parse_type(input: &[Line]) -> Result<Typed, String> {
     let ty_text: Vec<&str> = ty_lines.iter().map(|l| l.text.as_str()).collect();
     let literal = is_literal(ty.syntax()).then(|| ty_text.join("\n"));
     // emmylua ends a type at `?`, so `T?|U` and `T?[]` silently become type `T?` and a
-    // description starting `|U` or `[]` (UPSTREAM.md #13).
+    // description starting `|U` or `[]`.
     let rest = lines[end.0][end.1..].trim_start();
     if ty_text.last().is_some_and(|l| l.ends_with('?')) && rest.starts_with(['|', '[']) {
         return Err(format!(

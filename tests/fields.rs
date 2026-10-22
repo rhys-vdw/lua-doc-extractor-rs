@@ -114,7 +114,7 @@ fn global_types() {
     }
 }
 
-/// v3 accepted these. emmylua ends a type at `?` (UPSTREAM.md #13): `T?|U` inside brackets is
+/// v3 accepted these. emmylua ends a type at `?`: `T?|U` inside brackets is
 /// a parse error, and `T?[]` or `T?|U` alone is silently misread. v4 reports them all.
 #[test]
 fn global_types_emmylua_rejects() {

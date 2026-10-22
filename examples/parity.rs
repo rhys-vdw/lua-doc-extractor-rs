@@ -19,7 +19,7 @@ fn main() {
     };
 
     // emmylua's type rendering varies between runs (union order, alias expansion), so only
-    // facts that come out the same in two runs are compared (workaround A, UPSTREAM.md #6).
+    // facts that come out the same in two runs are compared. Seen in emmylua_doc_cli 0.25.1.
     let (old_facts, old_unstable) = stable_facts(stubs, old, "old");
     let (new_facts, new_unstable) = stable_facts(stubs, new, "new");
     for fact in old_unstable.union(&new_unstable) {
