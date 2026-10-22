@@ -18,6 +18,7 @@ This repository, `lua-doc-extractor-rs`, is the continuation of
 - [Usage](#usage)
   - [Example](#example)
   - [CLI](#cli)
+  - [CI](#ci)
   - [Comments](#comments)
   - [Annotations](#annotations)
 - [Contributing](#contributing)
@@ -25,10 +26,18 @@ This repository, `lua-doc-extractor-rs`, is the continuation of
 
 ## Install
 
+From [crates.io](https://crates.io/crates/lua-doc-extractor):
+
 ```sh
-$ git clone https://github.com/rhys-vdw/lua-doc-extractor-rs
-$ cd lua-doc-extractor-rs
-$ cargo install --path .
+$ cargo install lua-doc-extractor
+```
+
+Prebuilt binaries for Linux and Windows are attached to each [GitHub release](https://github.com/rhys-vdw/lua-doc-extractor-rs/releases).
+
+With [mise](https://mise.jdx.dev/):
+
+```sh
+$ mise use github:rhys-vdw/lua-doc-extractor-rs
 ```
 
 ## Usage
@@ -137,6 +146,51 @@ To exit with an error code if any errors are reported, provide the `--error` arg
 ```sh
 $ lua-doc-extractor --src "**/*.cpp" --dest library --error
 ```
+
+To write a source map, which maps each generated line to the C++ file and line it came from, provide the `--sourcemap` argument. It's used by [`remap`](#ci).
+
+```sh
+$ lua-doc-extractor --src "**/*.cpp" --dest library --sourcemap sourcemap.json
+```
+
+To report warnings and errors as GitHub Actions annotations, provide `--format github`.
+
+### CI
+
+In CI, the extractor's warnings and a type checker's diagnostics can be reported on the C++ that produced them, so they show on a pull request's diff.
+
+Extract with a source map for `remap`, and with `--format github` so the extractor's own warnings, which are already at C++ lines, show as annotations:
+
+```sh
+$ lua-doc-extractor --src "**/*.cpp" --dest library/generated --sourcemap sourcemap.json --format github
+```
+
+Check the library, with [LuaLS](https://luals.github.io/) or [emmylua_check](https://github.com/EmmyLuaLs/emmylua-analyzer-rust):
+
+```sh
+$ lua-language-server --check library --logpath log
+$ emmylua_check library -f json --output check.json
+```
+
+Then `remap` moves each diagnostic from the generated Lua onto its C++ line. It reads LuaLS's `check.json` or `emmylua_check`'s JSON. Hints are left out, and files that aren't generated are reported where they are.
+
+```sh
+$ lua-doc-extractor remap --sourcemap sourcemap.json --dest library/generated --format github log/check.json
+```
+
+`remap` always succeeds, so use the checker's exit code to fail the build:
+
+```sh
+status=0
+lua-language-server --check library --logpath log || status=$?
+lua-doc-extractor remap --sourcemap sourcemap.json --dest library/generated --format github log/check.json
+exit $status
+```
+
+> [!NOTE]
+> `emmylua_check` doesn't report diagnostics in `---@meta` files, which generated files are.
+>
+> GitHub shows at most 10 error and 10 warning annotations per step on a pull request. The rest are in the step's log.
 
 ### Comments
 
