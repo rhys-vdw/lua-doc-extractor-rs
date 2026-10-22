@@ -1,13 +1,58 @@
 use std::path::{Component, Path, PathBuf};
 use std::process::ExitCode;
 
-use clap::Parser;
-use lua_doc_extractor::{Options, doc::Severity, env, extract_library, scan::scan, source_map};
+use clap::{Args, Parser, Subcommand, ValueEnum};
+use lua_doc_extractor::{
+    Options, doc::Severity, env, extract_library, remap, scan::scan, source_map,
+};
 
 /// Extracts Lua docs from C-style comments.
 #[derive(Parser)]
-#[command(version)]
-struct Args {
+#[command(version, args_conflicts_with_subcommands = true)]
+struct Cli {
+    #[command(subcommand)]
+    command: Option<Command>,
+
+    #[command(flatten)]
+    extract: Extract,
+}
+
+#[derive(Subcommand)]
+enum Command {
+    /// Moves a Lua checker's diagnostics on the library onto the C++ they came from.
+    ///
+    /// Uses the source map written by --sourcemap. Reads LuaLS's check.json
+    /// (lua-language-server --check) or `emmylua_check -f json`. Hints are left out.
+    Remap(RemapArgs),
+}
+
+#[derive(Args)]
+struct RemapArgs {
+    /// The checker's JSON output.
+    #[arg(required = true)]
+    check: Vec<PathBuf>,
+
+    /// The source map written by --sourcemap.
+    #[arg(long)]
+    sourcemap: PathBuf,
+
+    /// The --dest the library was extracted to.
+    #[arg(long, short, default_value = ".")]
+    dest: PathBuf,
+
+    /// `github` prints GitHub Actions annotations, which show on a pull request's diff.
+    #[arg(long, value_enum, default_value_t = Format::Text)]
+    format: Format,
+}
+
+#[derive(Clone, Copy, ValueEnum)]
+enum Format {
+    Text,
+    Github,
+}
+
+#[derive(Args)]
+struct Extract {
     /// Source files or glob patterns.
     #[arg(long, num_args = 1..)]
     src: Vec<String>,
@@ -36,7 +81,45 @@ struct Args {
 }
 
 fn main() -> ExitCode {
-    let args = Args::parse();
+    let cli = Cli::parse();
+    match cli.command {
+        Some(Command::Remap(args)) => run_remap(args),
+        None => run_extract(cli.extract),
+    }
+}
+
+fn run_remap(args: RemapArgs) -> ExitCode {
+    let read = |path: &Path| -> Result<serde_json::Value, String> {
+        let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
+        serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))
+    };
+    let map = match read(&args.sourcemap).and_then(|j| remap::SourceMap::from_json(&j)) {
+        Ok(map) => map,
+        Err(e) => {
+            eprintln!("error: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let cwd = std::env::current_dir().expect("working directory");
+    for check in &args.check {
+        let diagnostics = match read(check).and_then(|j| remap::read_check(&j)) {
+            Ok(diagnostics) => diagnostics,
+            Err(e) => {
+                eprintln!("error: {}: {e}", check.display());
+                return ExitCode::FAILURE;
+            }
+        };
+        for d in remap::remap(&diagnostics, &map, &args.dest, &cwd) {
+            match args.format {
+                Format::Text => println!("{}", remap::text(&d)),
+                Format::Github => println!("{}", remap::github(&d)),
+            }
+        }
+    }
+    ExitCode::SUCCESS
+}
+
+fn run_extract(args: Extract) -> ExitCode {
     let options = Options { repo: args.repo };
     let (routes, route_errors) = env::parse_routes(&args.env);
     if !route_errors.is_empty() {
