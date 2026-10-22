@@ -1,37 +1,139 @@
 //! Generates an emmylua library from Lua doc comments in C++ source.
 //!
 //! ```text
-//! C++ ─scan→ Block ─parse→ Doc ─interpret→ Decl ─resolve→ Item ─emit→ Lua
+//! C++ ─scan→ Block ─parse→ Doc ─route→ output ─interpret→ Decl ─resolve→ Item ─emit→ Lua
 //! ```
 //!
 //! Each stage is a function from one value to the next. A `Doc` is what was written, a
 //! `Decl` is what one doc declares, and an `Item` is a declaration placed in the library.
+//! Routing decides which output file each doc goes to: its source's own, or one named by
+//! `--env` for the environments in its `@env`.
 
 pub mod decl;
 pub mod doc;
 pub mod emit;
+pub mod env;
 pub mod library;
 pub mod name;
 pub mod scan;
 mod text;
 pub mod types;
 
-use doc::{Diagnostic, parse_doc};
+use std::collections::{HashMap, HashSet};
+
+use doc::{Diagnostic, Doc, Severity, parse_doc};
 pub use emit::{Options, Rendered};
+use env::Routes;
+
+/// One generated Lua file.
+#[derive(Debug, Clone)]
+pub struct Output {
+    /// The file's path, relative to the output directory.
+    pub name: String,
+    /// The source files its docs came from, in order.
+    pub sources: Vec<String>,
+    pub rendered: Rendered,
+}
 
 /// Extracts one source file into one Lua file, with its line map.
 pub fn extract(path: &str, source: &str, options: &Options) -> (Rendered, Vec<Diagnostic>) {
     let mut diagnostics = Vec::new();
-    let docs: Vec<_> = scan::scan(source)
-        .iter()
-        .map(|block| parse_doc(path, block, &mut diagnostics))
-        .filter(|doc| !doc.description.is_empty() || !doc.tags.is_empty())
+    let mut docs = parse_file(path, source, &mut diagnostics);
+    env::apply_file_env(&mut docs, &mut diagnostics);
+    let rendered = build(docs, options, &mut diagnostics);
+    sort(&mut diagnostics);
+    (rendered, diagnostics)
+}
+
+/// Extracts source files, given as `(path, source)`, into a library. Each doc goes to its
+/// source's own output (`<path>.lua`), unless `routes` names an output for its environments.
+pub fn extract_library(
+    files: &[(String, String)],
+    routes: &Routes,
+    options: &Options,
+) -> (Vec<Output>, Vec<Diagnostic>) {
+    let mut diagnostics = Vec::new();
+    // Each output's docs, in the order the outputs are first used.
+    let mut outputs: Vec<(String, Vec<Doc>)> = Vec::new();
+    let mut index: HashMap<String, usize> = HashMap::new();
+
+    for (path, source) in files {
+        let mut docs = parse_file(path, source, &mut diagnostics);
+        env::apply_file_env(&mut docs, &mut diagnostics);
+        let mut unrouted = HashSet::new();
+        for doc in docs {
+            let envs = if routes.is_empty() {
+                vec![]
+            } else {
+                doc.envs()
+            };
+            let name = if envs.is_empty() {
+                format!("{path}.lua")
+            } else if let Some(file) = routes.get(&envs) {
+                file.to_string()
+            } else {
+                // One error per file and set of environments. The doc isn't written.
+                let key = env::key(&envs);
+                if unrouted.insert(key.clone()) {
+                    diagnostics.push(Diagnostic {
+                        severity: Severity::Error,
+                        path: path.clone(),
+                        pos: doc.source.start,
+                        message: format!("no --env output for '{key}'"),
+                    });
+                }
+                continue;
+            };
+            let i = *index.entry(name.clone()).or_insert_with(|| {
+                outputs.push((name, Vec::new()));
+                outputs.len() - 1
+            });
+            outputs[i].1.push(doc);
+        }
+    }
+
+    let outputs = outputs
+        .into_iter()
+        .map(|(name, docs)| {
+            let mut sources: Vec<String> = Vec::new();
+            for doc in &docs {
+                if !sources.contains(&doc.source.path) {
+                    sources.push(doc.source.path.clone());
+                }
+            }
+            let rendered = build(docs, options, &mut diagnostics);
+            Output {
+                name,
+                sources,
+                rendered,
+            }
+        })
         .collect();
+    sort(&mut diagnostics);
+    (outputs, diagnostics)
+}
+
+/// A source file's docs, without empty ones.
+fn parse_file(path: &str, source: &str, diagnostics: &mut Vec<Diagnostic>) -> Vec<Doc> {
+    scan::scan(source)
+        .iter()
+        .map(|block| parse_doc(path, block, diagnostics))
+        .filter(|doc| !doc.description.is_empty() || !doc.tags.is_empty())
+        .collect()
+}
+
+/// One output file from its docs.
+fn build(docs: Vec<Doc>, options: &Options, diagnostics: &mut Vec<Diagnostic>) -> Rendered {
     let decls = docs
         .into_iter()
-        .flat_map(|doc| decl::interpret(doc, &mut diagnostics))
+        .flat_map(|doc| decl::interpret(doc, diagnostics))
         .collect();
-    let items = library::resolve(decls);
-    diagnostics.sort_by_key(|d| (d.pos.line, d.pos.col));
-    (emit::emit(&items, options), diagnostics)
+    emit::emit(&library::resolve(decls), options)
+}
+
+/// Diagnostics in file and line order.
+fn sort(diagnostics: &mut [Diagnostic]) {
+    diagnostics.sort_by(|a, b| {
+        (a.path.as_str(), a.pos.line, a.pos.col).cmp(&(b.path.as_str(), b.pos.line, b.pos.col))
+    });
 }

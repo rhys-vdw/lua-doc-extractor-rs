@@ -407,7 +407,7 @@ fn strip(v: &Value) -> Value {
 }
 
 /// Removes the common indent, so tests can indent their C++.
-fn dedent(s: &str) -> String {
+pub fn dedent(s: &str) -> String {
     let lines: Vec<&str> = s.lines().skip_while(|l| l.trim().is_empty()).collect();
     let indent = lines
         .iter()

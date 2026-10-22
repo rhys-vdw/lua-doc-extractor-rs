@@ -23,6 +23,39 @@ pub struct Doc {
     pub tags: Vec<Tag>,
 }
 
+impl Doc {
+    /// The names from the doc's `@env` tags, without duplicates.
+    pub fn envs(&self) -> Vec<String> {
+        let mut envs: Vec<String> = Vec::new();
+        for tag in &self.tags {
+            if let Tag::Env { names } = tag {
+                for name in names {
+                    if !envs.contains(name) {
+                        envs.push(name.clone());
+                    }
+                }
+            }
+        }
+        envs
+    }
+
+    /// A file-level `@env` marker: a doc with `@env` that declares nothing, so its
+    /// environments apply to the rest of the file.
+    pub fn is_env_marker(&self) -> bool {
+        let declares = |t: &Tag| {
+            matches!(
+                t,
+                Tag::Function { .. }
+                    | Tag::Table { .. }
+                    | Tag::Field { .. }
+                    | Tag::Enum { .. }
+                    | Tag::Class { .. }
+            )
+        };
+        !self.envs().is_empty() && !self.tags.iter().any(declares)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum Tag {
     /// `@function Spring.X [description]`
@@ -52,6 +85,8 @@ pub enum Tag {
     Class { path: Path, raw: Raw },
     /// `@param name ...`
     Param { name: String, raw: Raw },
+    /// `@env name[, name...]`: the environments the doc is routed to. Never written out.
+    Env { names: Vec<String> },
     /// Any other tag, kept as written.
     Other(Raw),
     /// A description that isn't part of a tag's line. emmylua attaches it to the next tag,
@@ -418,6 +453,19 @@ fn to_tag(raw: Raw, source: &Source) -> Result<Tag, (Raw, String)> {
                 name: name.to_string(),
                 raw,
             })
+        }
+        // Names on the tag's line, as v3 reads them. Lines below are a description, which is
+        // dropped with the tag.
+        "env" => {
+            let names: Vec<String> = first.split(',').map(|n| n.trim().to_string()).collect();
+            let valid = names.iter().all(|n| {
+                parse_path(n)
+                    .is_some_and(|(path, rest)| rest.is_empty() && path.segments.len() == 1)
+            });
+            if !valid {
+                return fail(raw, "expected @env name[, name...]".into());
+            }
+            Ok(Tag::Env { names })
         }
         _ => Ok(Tag::Other(raw)),
     }

@@ -154,6 +154,8 @@ pub fn interpret(doc: Doc, diagnostics: &mut Vec<Diagnostic>) -> Vec<Decl> {
                 lines.extend(render(&raw));
             }
             Tag::Other(raw) => lines.extend(render(&raw)),
+            // Used to route the doc, never written out.
+            Tag::Env { .. } => {}
             Tag::Text(text) => pending_text = Some(text),
         }
         tag_lines.extend(lines[before..].iter().cloned());

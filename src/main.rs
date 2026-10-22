@@ -3,7 +3,7 @@ use std::path::{Component, Path, PathBuf};
 use std::process::ExitCode;
 
 use clap::Parser;
-use lua_doc_extractor::{Options, doc::Severity, extract, scan::scan};
+use lua_doc_extractor::{Options, doc::Severity, env, extract_library, scan::scan};
 use serde_json::json;
 
 /// Extracts Lua docs from C-style comments.
@@ -29,11 +29,29 @@ struct Args {
     /// Write a map from each generated line to its C++ line to this JSON file.
     #[arg(long)]
     sourcemap: Option<PathBuf>,
+
+    /// Write the docs tagged `@env` with exactly these names to this file (relative to
+    /// --dest). May be repeated. Docs without a tag go to their source's own file.
+    /// e.g. --env synced=synced.lua --env unsynced=unsynced.lua --env synced,unsynced=shared.lua
+    #[arg(long, value_name = "NAME[,NAME...]=FILE")]
+    env: Vec<String>,
 }
 
 fn main() -> ExitCode {
     let args = Args::parse();
     let options = Options { repo: args.repo };
+    let (routes, route_errors) = env::parse_routes(&args.env);
+    if !route_errors.is_empty() {
+        for e in route_errors {
+            eprintln!("error: {e}");
+        }
+        return ExitCode::FAILURE;
+    }
+    // An output from `--env` mixes source files, and the source map has one source per output.
+    if args.sourcemap.is_some() && !routes.is_empty() {
+        eprintln!("error: --sourcemap can't be used with --env yet");
+        return ExitCode::FAILURE;
+    }
 
     let mut files: Vec<PathBuf> = Vec::new();
     for pattern in args.src.iter().flat_map(|p| expand_braces(p)) {
@@ -53,54 +71,52 @@ fn main() -> ExitCode {
     }
 
     let mut error_count = 0;
-    let mut sourcemap = BTreeMap::new();
+    let mut sources = Vec::new();
     for file in &files {
         let Some(path) = relative_path(file) else {
             eprintln!(
-                "{}: error: source files must be inside the working directory, so that the \
-                 output can mirror their paths under --dest",
+                "{}: error: source files must be inside the working directory, so that the                  output can mirror their paths under --dest",
                 file.display()
             );
             error_count += 1;
             continue;
         };
-        let source = match std::fs::read_to_string(file) {
-            Ok(source) => source,
+        match std::fs::read_to_string(file) {
+            Ok(source) if scan(&source).is_empty() => {}
+            Ok(source) => sources.push((path, source)),
             Err(e) => {
                 eprintln!("{path}: error: {e}");
                 error_count += 1;
-                continue;
             }
+        }
+    }
+
+    let (outputs, diagnostics) = extract_library(&sources, &routes, &options);
+    for d in &diagnostics {
+        let severity = match d.severity {
+            Severity::Error => "error",
+            Severity::Warning => "warning",
         };
-        if scan(&source).is_empty() {
-            continue;
-        }
+        eprintln!(
+            "{}:{}:{}: {severity}: {}",
+            d.path, d.pos.line, d.pos.col, d.message
+        );
+    }
+    error_count += diagnostics
+        .iter()
+        .filter(|d| d.severity == Severity::Error)
+        .count();
 
-        let (rendered, diagnostics) = extract(&path, &source, &options);
-        for d in &diagnostics {
-            let severity = match d.severity {
-                Severity::Error => "error",
-                Severity::Warning => "warning",
-            };
-            eprintln!(
-                "{}:{}:{}: {severity}: {}",
-                d.path, d.pos.line, d.pos.col, d.message
-            );
-        }
-        error_count += diagnostics
-            .iter()
-            .filter(|d| d.severity == Severity::Error)
-            .count();
-
-        let output = format!("{path}.lua");
-        let out = args.dest.join(&output);
+    let mut sourcemap = BTreeMap::new();
+    for output in outputs {
+        let out = args.dest.join(&output.name);
         if let Some(parent) = out.parent() {
             std::fs::create_dir_all(parent).expect("create output directory");
         }
-        std::fs::write(&out, &rendered.lua).expect("write output");
+        std::fs::write(&out, &output.rendered.lua).expect("write output");
         sourcemap.insert(
-            output,
-            json!({ "source": path, "lines": rendered.line_map }),
+            output.name,
+            json!({ "source": output.sources[0], "lines": output.rendered.line_map }),
         );
     }
 
