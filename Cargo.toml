@@ -1,11 +1,15 @@
 [package]
 name = "lua-doc-extractor"
-version = "4.0.0-alpha.0"
+version = "4.0.0"
 edition = "2024"
+# `if let ... && let ...` chains.
+rust-version = "1.88"
 description = "Extracts EmmyLua docs from C-style comments."
 license = "MIT"
 repository = "https://github.com/rhys-vdw/lua-doc-extractor-rs"
-publish = false
+readme = "README.md"
+keywords = ["lua", "emmylua", "documentation", "annotations", "cpp"]
+categories = ["command-line-utilities", "development-tools"]
 
 [lib]
 name = "lua_doc_extractor"
