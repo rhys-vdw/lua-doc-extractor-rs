@@ -3,7 +3,8 @@
 use std::path::{Path, PathBuf};
 
 use lua_doc_extractor::remap::{
-    CheckDiagnostic, Level, Remapped, SourceMap, github, read_check, remap, text, uri_to_path,
+    CheckDiagnostic, Level, Remapped, SourceMap, annotation, github, read_check, remap, text,
+    uri_to_path,
 };
 use serde_json::json;
 
@@ -184,5 +185,21 @@ fn formats() {
     assert_eq!(
         text(&r),
         "rts/a,b.cpp:12: warning: Type 'x' not found\n100% [type-not-found]"
+    );
+}
+
+/// The extractor's own diagnostics have a column, and no code.
+#[test]
+fn an_annotation_with_a_column() {
+    assert_eq!(
+        annotation(
+            Level::Error,
+            "rts/a.cpp",
+            3,
+            Some(4),
+            None,
+            "invalid @param name 'fun(...)'"
+        ),
+        "::error file=rts/a.cpp,line=3,col=4::invalid @param name 'fun(...)'"
     );
 }

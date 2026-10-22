@@ -73,6 +73,11 @@ struct Extract {
     #[arg(long)]
     sourcemap: Option<PathBuf>,
 
+    /// How to print warnings and errors. `github` prints GitHub Actions annotations, on standard
+    /// output, which show on a pull request's diff.
+    #[arg(long, value_enum, default_value_t = Format::Text)]
+    format: Format,
+
     /// Write the docs tagged `@env` with exactly these names to this file (relative to
     /// --dest). May be repeated. Docs without a tag go to their source's own file.
     /// e.g. --env synced=synced.lua --env unsynced=unsynced.lua --env synced,unsynced=shared.lua
@@ -169,14 +174,27 @@ fn run_extract(args: Extract) -> ExitCode {
 
     let (outputs, diagnostics) = extract_library(&sources, &routes, &options);
     for d in &diagnostics {
-        let severity = match d.severity {
-            Severity::Error => "error",
-            Severity::Warning => "warning",
+        let (severity, level) = match d.severity {
+            Severity::Error => ("error", remap::Level::Error),
+            Severity::Warning => ("warning", remap::Level::Warning),
         };
-        eprintln!(
-            "{}:{}:{}: {severity}: {}",
-            d.path, d.pos.line, d.pos.col, d.message
-        );
+        match args.format {
+            Format::Text => eprintln!(
+                "{}:{}:{}: {severity}: {}",
+                d.path, d.pos.line, d.pos.col, d.message
+            ),
+            Format::Github => println!(
+                "{}",
+                remap::annotation(
+                    level,
+                    &d.path,
+                    d.pos.line,
+                    Some(d.pos.col),
+                    Some("lua-doc-extractor"),
+                    &d.message
+                )
+            ),
+        }
     }
     error_count += diagnostics
         .iter()

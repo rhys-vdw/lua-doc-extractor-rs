@@ -228,21 +228,39 @@ fn slashes(path: &Path) -> String {
 
 /// A GitHub Actions workflow command, which shows on the line in a pull request.
 pub fn github(d: &Remapped) -> String {
-    let command = match d.level {
+    annotation(
+        d.level,
+        &d.path,
+        d.line,
+        None,
+        d.code.as_deref(),
+        &d.message,
+    )
+}
+
+/// A GitHub Actions workflow command (`::error file=...,line=...::message`). GitHub reads these
+/// from a step's standard output, and shows them on the file's line in a pull request.
+pub fn annotation(
+    level: Level,
+    path: &str,
+    line: usize,
+    col: Option<usize>,
+    title: Option<&str>,
+    message: &str,
+) -> String {
+    let command = match level {
         Level::Error => "error",
         Level::Warning => "warning",
         Level::Notice => "notice",
     };
-    let title = d
-        .code
-        .as_deref()
-        .map(|c| format!(",title={}", escape_property(c)))
+    let col = col.map(|c| format!(",col={c}")).unwrap_or_default();
+    let title = title
+        .map(|t| format!(",title={}", escape_property(t)))
         .unwrap_or_default();
     format!(
-        "::{command} file={},line={}{title}::{}",
-        escape_property(&d.path),
-        d.line,
-        escape_data(&d.message)
+        "::{command} file={},line={line}{col}{title}::{}",
+        escape_property(path),
+        escape_data(message)
     )
 }
 
