@@ -15,6 +15,7 @@ pub mod emit;
 pub mod env;
 pub mod library;
 pub mod name;
+pub mod remap;
 pub mod scan;
 mod text;
 pub mod types;
