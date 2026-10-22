@@ -1,4 +1,5 @@
-# Releases a version: push a tag like `v4.0.0` that matches the version in Cargo.toml.
+# Releases a version: push a tag like `v4.0.0` that matches the version in Cargo.toml, or run
+# bump.yml (Actions > Bump version), which bumps, tags and starts this.
 # Run it by hand (Actions > Release > Run workflow) to rehearse: that only checks and builds.
 #
 # 1. check:   the tag matches Cargo.toml, and the tests pass
