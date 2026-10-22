@@ -1,4 +1,5 @@
 # Bumps the version, commits, tags and starts the release (Actions > Bump version > Run workflow).
+# It runs `cargo release`, configured in release.toml, as you could locally.
 #
 # A tag pushed with the workflow's token doesn't trigger other workflows, so this starts
 # release.yml on the new tag itself. That run is the same as pushing the tag by hand.
@@ -24,33 +25,17 @@ jobs:
         with:
           ref: main
       - uses: dtolnay/rust-toolchain@stable
-      - name: Bump
-        id: bump
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-release
+      - name: Bump, commit, tag and push
         run: |
-          old=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')
-          if ! [[ "$old" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
-            echo "::error::Can't bump $old: expected MAJOR.MINOR.PATCH"
-            exit 1
-          fi
-          major=${BASH_REMATCH[1]} minor=${BASH_REMATCH[2]} patch=${BASH_REMATCH[3]}
-          case "${{ inputs.bump }}" in
-            major) new="$((major + 1)).0.0" ;;
-            minor) new="$major.$((minor + 1)).0" ;;
-            patch) new="$major.$minor.$((patch + 1))" ;;
-          esac
-          sed -i "0,/^version = \"$old\"/s//version = \"$new\"/" Cargo.toml
-          cargo update --workspace
-          echo "Bumped $old to $new"
-          echo "version=$new" >> "$GITHUB_OUTPUT"
-      - name: Commit, tag and push
-        run: |
-          tag="v${{ steps.bump.outputs.version }}"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -am "$tag"
-          git tag "$tag"
-          git push --atomic origin HEAD:main "$tag"
+          cargo release ${{ inputs.bump }} --execute --no-confirm
       - name: Start the release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh workflow run release.yml --repo "$GITHUB_REPOSITORY" --ref "v${{ steps.bump.outputs.version }}"
+        run: |
+          version=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')
+          gh workflow run release.yml --repo "$GITHUB_REPOSITORY" --ref "v$version"

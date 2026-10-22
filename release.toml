@@ -1,0 +1,8 @@
+# cargo-release: `cargo release patch` (or minor, major) shows what it would do; add `--execute` to
+# bump, commit, tag and push. The Bump version workflow runs the same thing.
+
+# The tag's release workflow publishes to crates.io, through trusted publishing.
+publish = false
+allow-branch = ["main"]
+pre-release-commit-message = "v{{version}}"
+tag-message = "v{{version}}"
