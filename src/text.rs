@@ -1,14 +1,33 @@
 //! Text as lines that remember where they came from.
 
-/// A line of text, and the C++ line (1-based) it came from, if any.
+use std::rc::Rc;
+
+/// A C++ file and line (1-based).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Src {
+    pub file: Rc<str>,
+    pub line: usize,
+}
+
+impl Src {
+    pub fn new(file: impl Into<Rc<str>>, line: usize) -> Self {
+        Src {
+            file: file.into(),
+            line,
+        }
+    }
+}
+
+/// A line of text, and the C++ line it came from, if any. An output can mix lines from several
+/// files, so each line keeps its file.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Line {
     pub text: String,
-    pub src: Option<usize>,
+    pub src: Option<Src>,
 }
 
 impl Line {
-    pub fn new(text: impl Into<String>, src: Option<usize>) -> Self {
+    pub fn new(text: impl Into<String>, src: Option<Src>) -> Self {
         Line {
             text: text.into(),
             src,

@@ -6,7 +6,7 @@
 use crate::doc::{Diagnostic, Doc, Raw, Severity, Source, Tag};
 use crate::name::Path;
 use crate::scan::Pos;
-use crate::text::{Line, join, trimmed};
+use crate::text::{Line, Src, join, trimmed};
 use crate::types::Typed;
 
 /// The comment written above a declaration: a description, then tag lines.
@@ -43,7 +43,7 @@ pub enum Decl {
         params: Vec<String>,
         comment: Comment,
         source: Source,
-        line: Option<usize>,
+        line: Option<Src>,
     },
     /// `@field Table.name` outside a class, or `@global name`
     Field(Field),
@@ -52,7 +52,7 @@ pub enum Decl {
         path: Path,
         comment: Comment,
         source: Source,
-        line: Option<usize>,
+        line: Option<Src>,
     },
     /// `@class Name` or `@enum Name`
     Type {
@@ -60,7 +60,7 @@ pub enum Decl {
         path: Path,
         comment: Comment,
         source: Source,
-        line: Option<usize>,
+        line: Option<Src>,
     },
     /// A doc that declares nothing, e.g. an `@alias`
     Comment { comment: Comment, source: Source },
@@ -72,7 +72,7 @@ pub struct Field {
     pub typed: Typed,
     pub comment: Comment,
     pub source: Source,
-    pub line: Option<usize>,
+    pub line: Option<Src>,
 }
 
 pub fn interpret(doc: Doc, diagnostics: &mut Vec<Diagnostic>) -> Vec<Decl> {
@@ -84,10 +84,10 @@ pub fn interpret(doc: Doc, diagnostics: &mut Vec<Diagnostic>) -> Vec<Decl> {
     let is_class = tags.iter().any(|t| matches!(t, Tag::Class { .. }));
     let has_tags = tags.iter().any(|t| !matches!(t, Tag::Text(_)));
 
-    let mut functions: Vec<(Path, Vec<Line>, Option<usize>)> = Vec::new();
-    let mut table: Option<(Path, Vec<Line>, Option<usize>)> = None;
+    let mut functions: Vec<(Path, Vec<Line>, Option<Src>)> = Vec::new();
+    let mut table: Option<(Path, Vec<Line>, Option<Src>)> = None;
     let mut enum_: Option<(Path, Vec<Line>)> = None;
-    let mut class: Option<(Path, Option<usize>)> = None;
+    let mut class: Option<(Path, Option<Src>)> = None;
     // Each field, and whether it's a `@global`.
     let mut fields: Vec<(Field, bool)> = Vec::new();
     let mut params: Vec<String> = Vec::new();
@@ -125,7 +125,7 @@ pub fn interpret(doc: Doc, diagnostics: &mut Vec<Diagnostic>) -> Vec<Decl> {
             } => table = Some((path, description, line)),
             Tag::Enum { path, raw } => enum_ = Some((path, render(&raw))),
             Tag::Class { path, raw } => {
-                class = Some((path, raw.lines[0].src));
+                class = Some((path, raw.lines[0].src.clone()));
                 lines.extend(render(&raw));
             }
             Tag::Field { raw, .. } if is_class => lines.extend(render(&raw)),
@@ -145,7 +145,7 @@ pub fn interpret(doc: Doc, diagnostics: &mut Vec<Diagnostic>) -> Vec<Decl> {
                     typed,
                     comment: Comment::default(),
                     source: field_source,
-                    line: raw.lines[0].src,
+                    line: raw.lines[0].src.clone(),
                 };
                 fields.push((field, raw.name == "global"));
             }
@@ -193,7 +193,7 @@ pub fn interpret(doc: Doc, diagnostics: &mut Vec<Diagnostic>) -> Vec<Decl> {
         .cloned();
     if let Some((path, enum_line)) = enum_ {
         // `@enum` goes first, so emmylua attaches the tags that follow it to the enum.
-        let line = enum_line[0].src;
+        let line = enum_line[0].src.clone();
         let mut c = comment(vec![]);
         c.tags = [enum_line, c.tags].concat();
         decls.push(Decl::Type {
@@ -295,9 +295,12 @@ pub fn interpret(doc: Doc, diagnostics: &mut Vec<Diagnostic>) -> Vec<Decl> {
 }
 
 /// The position of a tag's line, for a diagnostic: its line, or the doc's start.
-fn field_pos(source: &Source, line: Option<usize>) -> Pos {
+fn field_pos(source: &Source, line: Option<Src>) -> Pos {
     match line {
-        Some(line) => Pos { line, col: 1 },
+        Some(src) => Pos {
+            line: src.line,
+            col: 1,
+        },
         None => source.start,
     }
 }
@@ -309,6 +312,6 @@ fn render(raw: &Raw) -> Vec<Line> {
         lines.pop();
     }
     let first = format!("@{} {}", raw.name, lines[0].text);
-    lines[0] = Line::new(first.trim_end(), lines[0].src);
+    lines[0] = Line::new(first.trim_end(), lines[0].src.clone());
     lines
 }
