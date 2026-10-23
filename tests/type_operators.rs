@@ -51,7 +51,12 @@ fn in_after_a_return_type() {
 #[test]
 fn the_in_error_suggests_a_fix() {
     let lib = extract_reporting("", "/*** @field Foo.speed number in m/s */");
-    lib.errors(1, "@param speed number Speed in m/s.");
+    lib.errors(
+        1,
+        "write `@param speed number Speed in m/s.`, not `@param speed number in m/s`.",
+    );
+    // It says what's wrong itself, so it isn't prefixed with the tag.
+    assert!(lib.diagnostics[0].message.starts_with("Unexpected `in`. "));
 }
 
 #[test]
@@ -66,13 +71,15 @@ fn minus_after_a_type() {
         "#,
     );
     lib.errors(3, "EmmyLua treats `integer - the` as an invalid type");
-    lib.errors(3, "do not start your description with an `-` or `+`");
+    lib.errors(3, "Unexpected `-`. ");
+    lib.errors(3, "Don't start a description with `-` or `+`.");
 }
 
 #[test]
 fn plus_after_a_type() {
     let lib = extract_reporting("", "/*** @field Foo.count integer + one more */");
     lib.errors(1, "EmmyLua treats `integer + one` as an invalid type");
+    lib.errors(1, "Unexpected `+`. ");
 }
 
 #[test]

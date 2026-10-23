@@ -55,7 +55,10 @@ fn field_description_below_the_field_warns() {
          */
         "#,
     );
-    lib.warns(3, "text below @field belongs to the next tag");
+    lib.warns(
+        3,
+        "Text below `@field`. Put the description on the tag line, or for a longer one, in its own doc comment above `@field foo integer`.",
+    );
     lib.field("TheTable.bar")
         .has_description("This is foo.\n\nBar.");
     insta::assert_snapshot!(lib.body());

@@ -286,7 +286,7 @@ fn an_unrouted_env_is_one_error_per_file_and_env() {
     };
     assert_eq!(d.severity, Severity::Error);
     assert_eq!(d.path, "a.cpp");
-    assert!(d.message.contains("'menu'"), "{d:#?}");
+    assert!(d.message.contains("`menu`"), "{d:#?}");
 }
 
 #[test]
@@ -505,7 +505,7 @@ fn more_than_one_file_level_env_is_an_error() {
     assert_eq!(d.severity, Severity::Error);
     assert_eq!(d.pos.line, 3, "{d:#?}");
     assert!(
-        d.message.contains("more than one file-level @env"),
+        d.message.contains("More than one file-level `@env` doc"),
         "{d:#?}"
     );
 }

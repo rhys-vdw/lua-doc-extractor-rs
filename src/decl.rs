@@ -238,7 +238,7 @@ pub fn interpret(doc: Doc, diagnostics: &mut Vec<Diagnostic>) -> Vec<Decl> {
                 path: source.path.clone(),
                 pos: field_pos(&source, field.line),
                 message: format!(
-                    "@field {} has no table; declare a global with `@global {}`",
+                    "`@field {}` has no table. Declare a global with `@global {}`.",
                     field.path, field.path
                 ),
             });
@@ -283,7 +283,7 @@ pub fn interpret(doc: Doc, diagnostics: &mut Vec<Diagnostic>) -> Vec<Decl> {
                 severity: Severity::Warning,
                 path: source.path.clone(),
                 pos: source.start,
-                message: "this doc has only a description, so it isn't attached to anything".into(),
+                message: "Doc comment has no tags, so EmmyLua ignores it.".into(),
             });
         }
         decls.push(Decl::Comment {

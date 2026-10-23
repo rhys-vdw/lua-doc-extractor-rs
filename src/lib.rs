@@ -82,7 +82,7 @@ pub fn extract_library(
                         severity: Severity::Error,
                         path: path.clone(),
                         pos: doc.source.start,
-                        message: format!("no --env output for '{key}'"),
+                        message: format!("No `--env` output for `{key}`."),
                     });
                 }
                 continue;
