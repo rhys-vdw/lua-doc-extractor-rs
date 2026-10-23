@@ -51,12 +51,26 @@ pub fn parse_type(input: &[Line]) -> Result<Typed, String> {
 
     let range = ty.syntax().text_range();
     let mut start = locate(lines, usize::from(range.start()));
-    let end = locate(lines, usize::from(range.end()));
+    let mut end = locate(lines, usize::from(range.end()));
     if start.0 == 0 {
         // A type on the tag's line starts at its first character. The node can start later:
         // the `(` of `(A|B)?` isn't part of it, because emmylua_parser has no node for a
         // parenthesised type.
         start.1 = lines[0].len() - lines[0].trim_start().len();
+    }
+    // For the same reason, `(A|B)` with no suffix ends before its `)`s: take one for each `(`
+    // left open.
+    let mut open = slice(input, start, end)
+        .iter()
+        .map(|l| l.text.matches('(').count() as isize - l.text.matches(')').count() as isize)
+        .sum::<isize>();
+    while open > 0 {
+        let rest = &lines[end.0][end.1..];
+        let Some(after) = rest.trim_start().strip_prefix(')') else {
+            break;
+        };
+        end.1 = lines[end.0].len() - after.len();
+        open -= 1;
     }
 
     let mut ty_lines = slice(input, start, end);
@@ -192,6 +206,17 @@ mod tests {
         let t = parse("(integer|table<string, boolean>|Foo)? The value.");
         assert_eq!(texts(&t.ty), ["(integer|table<string, boolean>|Foo)?"]);
         assert_eq!(texts(&t.description), ["The value."]);
+    }
+
+    #[test]
+    fn parenthesised_type_without_a_suffix() {
+        let t = parse("(0|1|2|3) `0` fixed, `1` random.");
+        assert_eq!(texts(&t.ty), ["(0|1|2|3)"]);
+        assert_eq!(texts(&t.description), ["`0` fixed, `1` random."]);
+
+        let t = parse("((A|B)) Nested.");
+        assert_eq!(texts(&t.ty), ["((A|B))"]);
+        assert_eq!(texts(&t.description), ["Nested."]);
     }
 
     #[test]
