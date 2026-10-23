@@ -85,8 +85,8 @@ pub fn parse_type(input: &[Line]) -> Result<Typed, String> {
     let rest = lines[end.0][end.1..].trim_start();
     if ty_text.last().is_some_and(|l| l.ends_with('?')) && rest.starts_with(['|', '[']) {
         return Err(format!(
-            "emmylua ends the type at `?`, so `{}{rest}` isn't read as one type; \
-             write `(T|U)?` or `(T?)[]`",
+            "EmmyLua ends the type at `?`, so `{}{rest}` isn't read as one type. \
+             Write `(T|U)?` or `(T?)[]`",
             ty_text.join("")
         ));
     }

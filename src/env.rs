@@ -83,14 +83,14 @@ pub fn apply_file_env(docs: &mut Vec<Doc>, diagnostics: &mut Vec<Diagnostic>) {
         [_] => {
             report(
                 &docs[markers[0]],
-                "a file-level @env doc must be the first doc in the file",
+                "A file-level `@env` doc must be the first doc in the file.",
             );
             Vec::new()
         }
         [_, second, ..] => {
             report(
                 &docs[*second],
-                "more than one file-level @env doc; a file can have one",
+                "More than one file-level `@env` doc. A file can have only one.",
             );
             Vec::new()
         }

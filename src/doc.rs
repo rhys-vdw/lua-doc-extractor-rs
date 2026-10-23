@@ -169,8 +169,9 @@ pub fn parse_doc(path: &str, block: &Block, diagnostics: &mut Vec<Diagnostic>) -
         }
     }
 
-    for (line, message) in &parsed.errors {
-        let in_item = |&(start, end): &(usize, usize)| (start..=end).contains(line);
+    for error in &parsed.errors {
+        let line = error.line;
+        let in_item = |&(start, end): &(usize, usize)| (start..=end).contains(&line);
         if own_errors.iter().any(in_item) {
             continue;
         }
@@ -178,13 +179,14 @@ pub fn parse_doc(path: &str, block: &Block, diagnostics: &mut Vec<Diagnostic>) -
         let tag = parsed
             .items
             .iter()
-            .find(|i| i.kind == ItemKind::Tag && (i.start..=i.end).contains(line))
-            .and_then(|i| tag_start(&block.lines[i.start].text));
+            .find(|i| i.kind == ItemKind::Tag && (i.start..=i.end).contains(&line))
+            .and_then(|i| tag_start(&block.lines[i.start].text))
+            .filter(|_| error.emmylua);
         let message = match tag {
-            Some((name, _)) => format!("in @{name}: {message}"),
-            None => message.clone(),
+            Some((name, _)) => format!("In `@{name}`: {}", sentence_end(&error.message)),
+            None => sentence_end(&error.message),
         };
-        report(Severity::Error, *line, message);
+        report(Severity::Error, line, message);
     }
 
     Doc {
@@ -216,8 +218,23 @@ struct Item {
 
 struct Split {
     items: Vec<Item>,
-    /// emmylua parse errors, by line.
-    errors: Vec<(usize, String)>,
+    errors: Vec<ParseError>,
+}
+
+struct ParseError {
+    line: usize,
+    message: String,
+    /// One of emmylua's, which doesn't name the tag it's in.
+    emmylua: bool,
+}
+
+/// Ends a message with a full stop, as emmylua's don't.
+fn sentence_end(message: &str) -> String {
+    if message.ends_with(['.', '?', '!']) {
+        message.to_string()
+    } else {
+        format!("{message}.")
+    }
 }
 
 /// Splits a block into its description, tags and free text, as emmylua reads it.
@@ -241,17 +258,28 @@ fn split(block: &Block) -> Split {
     };
 
     let tree = LuaParser::parse(&text, ParserConfig::default());
-    let mut errors: Vec<(usize, String)> = tree
+    let mut errors: Vec<ParseError> = tree
         .get_errors()
         .iter()
-        .map(|e| (line_of(usize::from(e.range.start())), e.message.to_string()))
+        .map(|e| ParseError {
+            line: line_of(usize::from(e.range.start())),
+            message: e.message.to_string(),
+            emmylua: true,
+        })
         .collect();
     for node in tree.get_red_root().descendants() {
         if let Some(message) = LuaDocBinaryType::cast(node.clone()).and_then(type_operator_error) {
             let line = line_of(usize::from(node.text_range().start()));
             // A run like `A - b - c` nests; report only the outermost.
-            if !errors.iter().any(|(l, m)| *l == line && *m == message) {
-                errors.push((line, message));
+            if !errors
+                .iter()
+                .any(|e| e.line == line && e.message == message)
+            {
+                errors.push(ParseError {
+                    line,
+                    message,
+                    emmylua: false,
+                });
             }
         }
     }
@@ -355,16 +383,18 @@ fn type_operator_error(binary: LuaDocBinaryType) -> Option<String> {
     let ty = binary.syntax().text().to_string().replace("\n---", " ");
     match op {
         LuaTokenKind::TkIn => Some(format!(
-            "EmmyLua treats `{ty}` as an invalid type because `in` is a keyword. Usually this \
-             happens when the type is being treated as part of the description. e.g.\n\
-             ```\n@param speed number in m/s\n```\n\
-             If so, change it to:\n\
-             ```\n@param speed number Speed in m/s.\n```"
+            "Unexpected `in`. EmmyLua treats `{ty}` as an invalid type because `in` is a \
+             keyword. Usually this happens when the description is read as part of the type. \
+             For example, write `@param speed number Speed in m/s.`, not \
+             `@param speed number in m/s`."
         )),
-        _ => Some(format!(
-            "EmmyLua treats `{ty}` as an invalid type. To avoid this, do not start your \
-             description with an `-` or `+`."
-        )),
+        _ => {
+            let op = if op == LuaTokenKind::TkPlus { '+' } else { '-' };
+            Some(format!(
+                "Unexpected `{op}`. EmmyLua treats `{ty}` as an invalid type. Don't start a \
+                 description with `-` or `+`."
+            ))
+        }
     }
 }
 
@@ -394,8 +424,8 @@ fn tag_warnings(raw: &Raw, items: &[Item], i: usize, block: &Block) -> Vec<Strin
                 .any(|l| !l.is_blank() && !l.text.trim_start().starts_with('|'));
             if continued || text_follows {
                 warnings.push(format!(
-                    "@{} description must be on one line, on the tag line; move longer text to \
-                     the function description",
+                    "Text below `@{0}`. A `@{0}` description must be on the tag line; move \
+                     longer text to the function description.",
                     raw.name
                 ));
             }
@@ -404,11 +434,25 @@ fn tag_warnings(raw: &Raw, items: &[Item], i: usize, block: &Block) -> Vec<Strin
         "field" | "class" | "enum" | "alias"
             if !item.inline && text_follows && (directly_below(next) || text_is_unattached) =>
         {
-            warnings.push(format!(
-                "text below @{} belongs to the next tag in emmylua; put it on the tag line, or \
-                 above the tag",
-                raw.name
-            ));
+            // For a field, show the doc to move it to.
+            let field = (raw.name == "field")
+                .then(|| parse_path(&raw.lines[0].text))
+                .flatten()
+                .and_then(|(path, rest)| {
+                    let typed = parse_type(&[Line::new(rest, None)]).ok()?;
+                    let ty: Vec<&str> = typed.ty.iter().map(|l| l.text.trim()).collect();
+                    Some(format!("@field {path} {}", ty.join(" ")))
+                });
+            warnings.push(match field {
+                Some(field) => format!(
+                    "Text below `@field`. Put the description on the tag line, or for a longer \
+                     one, in its own doc comment above `{field}`."
+                ),
+                None => format!(
+                    "Text below `@{}`. Put the description on the tag line, or above the tag.",
+                    raw.name
+                ),
+            });
         }
         _ => {}
     }
@@ -431,7 +475,10 @@ fn to_tag(raw: Raw, source: &Source) -> Result<Tag, (Raw, String)> {
     match raw.name.as_str() {
         "function" | "table" => {
             let Some((path, rest)) = parse_path(first) else {
-                return fail(raw.clone(), format!("expected a name after @{}", raw.name));
+                return fail(
+                    raw.clone(),
+                    format!("Expected a name after `@{}`.", raw.name),
+                );
             };
             let description = continuation(Line::new(rest, line.clone()), &raw.lines[1..]);
             Ok(if raw.name == "function" {
@@ -450,7 +497,10 @@ fn to_tag(raw: Raw, source: &Source) -> Result<Tag, (Raw, String)> {
         }
         "field" | "global" => {
             let Some((path, rest)) = parse_path(first) else {
-                return fail(raw.clone(), format!("expected a name after @{}", raw.name));
+                return fail(
+                    raw.clone(),
+                    format!("Expected a name after `@{}`.", raw.name),
+                );
             };
             let mut lines = vec![Line::new(rest, line)];
             lines.extend(raw.lines[1..].iter().cloned());
@@ -463,13 +513,17 @@ fn to_tag(raw: Raw, source: &Source) -> Result<Tag, (Raw, String)> {
                 }),
                 Err(message) => fail(
                     raw.clone(),
-                    format!("invalid type in @{}: {message}", raw.name),
+                    format!(
+                        "Invalid type in `@{}`: {}",
+                        raw.name,
+                        sentence_end(&message)
+                    ),
                 ),
             }
         }
         "enum" => match parse_path(first) {
             Some((path, _)) => Ok(Tag::Enum { path, raw }),
-            None => fail(raw.clone(), "expected a name after @enum".into()),
+            None => fail(raw.clone(), "Expected a name after `@enum`.".into()),
         },
         "class" => {
             // Skip a flag such as `(exact)`.
@@ -479,7 +533,7 @@ fn to_tag(raw: Raw, source: &Source) -> Result<Tag, (Raw, String)> {
             };
             match parse_path(name) {
                 Some((path, _)) => Ok(Tag::Class { path, raw }),
-                None => fail(raw.clone(), "expected a name after @class".into()),
+                None => fail(raw.clone(), "Expected a name after `@class`.".into()),
             }
         }
         "param" => {
@@ -491,7 +545,7 @@ fn to_tag(raw: Raw, source: &Source) -> Result<Tag, (Raw, String)> {
                 || parse_path(name)
                     .is_some_and(|(path, rest)| rest.is_empty() && path.segments.len() == 1);
             if !valid {
-                return fail(raw.clone(), format!("invalid @param name '{word}'"));
+                return fail(raw.clone(), format!("Invalid `@param` name `{word}`."));
             }
             Ok(Tag::Param {
                 name: name.to_string(),
@@ -507,7 +561,7 @@ fn to_tag(raw: Raw, source: &Source) -> Result<Tag, (Raw, String)> {
                     .is_some_and(|(path, rest)| rest.is_empty() && path.segments.len() == 1)
             });
             if !valid {
-                return fail(raw, "expected @env name[, name...]".into());
+                return fail(raw, "Expected `@env name[, name...]`.".into());
             }
             Ok(Tag::Env { names })
         }

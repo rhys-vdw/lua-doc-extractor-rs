@@ -198,8 +198,8 @@ fn an_annotation_with_a_column() {
             3,
             Some(4),
             None,
-            "invalid @param name 'fun(...)'"
+            "Invalid `@param` name `fun(...)`."
         ),
-        "::error file=rts/a.cpp,line=3,col=4::invalid @param name 'fun(...)'"
+        "::error file=rts/a.cpp,line=3,col=4::Invalid `@param` name `fun(...)`."
     );
 }

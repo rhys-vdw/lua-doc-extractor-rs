@@ -131,7 +131,7 @@ fn global_types_emmylua_rejects() {
         };
         assert_eq!(d.severity, Severity::Error, "{ty}: {d:#?}");
         assert!(
-            d.message.contains("invalid type in @global"),
+            d.message.contains("Invalid type in `@global`"),
             "{ty}: {d:#?}"
         );
     }

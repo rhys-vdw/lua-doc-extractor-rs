@@ -94,7 +94,7 @@ fn ldoc_optional_return_is_an_error() {
         panic!("expected one error, found {:#?}", lib.diagnostics);
     };
     assert_eq!((d.severity, d.pos.line), (Severity::Error, 4), "{d:#?}");
-    assert!(d.message.starts_with("in @return?: "), "{d:#?}");
+    assert!(d.message.starts_with("In `@return?`: "), "{d:#?}");
     lib.function("LDocTable.LDoc").param("s").has_type("string");
     insta::assert_snapshot!(lib.body());
 }
@@ -130,7 +130,10 @@ fn multi_line_param_description_warns() {
          */
         "#,
     );
-    lib.warns(3, "@param description must be on one line");
+    lib.warns(
+        3,
+        "Text below `@param`. A `@param` description must be on the tag line",
+    );
     insta::assert_snapshot!(lib.body());
 }
 
