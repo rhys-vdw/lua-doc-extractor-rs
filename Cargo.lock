@@ -517,9 +517,8 @@ dependencies = [
 
 [[package]]
 name = "emmylua_code_analysis"
-version = "0.25.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9eb1712458e4cbf7b2e102e24cf451d129503c53c61280d8a772984c123f41ea"
+version = "0.30.0"
+source = "git+https://github.com/EmmyLuaLs/emmylua-analyzer-rust?rev=56267ea#56267eada8fdec8cbde0318a0afc1bb385ea66b0"
 dependencies = [
  "dirs",
  "emmy_lsp_types",
@@ -537,6 +536,7 @@ dependencies = [
  "regex",
  "rowan",
  "rust-i18n",
+ "rustc-hash 2.1.3",
  "schemars 1.2.3",
  "serde",
  "serde_json",
@@ -551,8 +551,7 @@ dependencies = [
 [[package]]
 name = "emmylua_diagnostic_macro"
 version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6db0a41e911bf61d4c53519cc7e6165a3cf76966bb9024cbc69a43dbc0bbd868"
+source = "git+https://github.com/EmmyLuaLs/emmylua-analyzer-rust?rev=56267ea#56267eada8fdec8cbde0318a0afc1bb385ea66b0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -561,9 +560,8 @@ dependencies = [
 
 [[package]]
 name = "emmylua_doc_cli"
-version = "0.25.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c2e805b772fedeea861fd64a94fe450a7e3fd3c83096c6f3d99543d27c2b55bc"
+version = "0.30.0"
+source = "git+https://github.com/EmmyLuaLs/emmylua-analyzer-rust?rev=56267ea#56267eada8fdec8cbde0318a0afc1bb385ea66b0"
 dependencies = [
  "clap",
  "emmy_lsp_types",
@@ -584,9 +582,8 @@ dependencies = [
 
 [[package]]
 name = "emmylua_parser"
-version = "0.29.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "03df4e9f7eee958a976e1ba20af14cf648f7e76c8646490b590b2151468d6c99"
+version = "0.30.0"
+source = "git+https://github.com/EmmyLuaLs/emmylua-analyzer-rust?rev=56267ea#56267eada8fdec8cbde0318a0afc1bb385ea66b0"
 dependencies = [
  "rowan",
  "rust-i18n",
@@ -595,9 +592,8 @@ dependencies = [
 
 [[package]]
 name = "emmylua_parser_desc"
-version = "0.29.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9552391bf04e9a64398da18035a722021710217f18f1ef1d8d3e09cec05a8151"
+version = "0.30.0"
+source = "git+https://github.com/EmmyLuaLs/emmylua-analyzer-rust?rev=56267ea#56267eada8fdec8cbde0318a0afc1bb385ea66b0"
 dependencies = [
  "emmylua_parser",
  "rowan",
@@ -1669,7 +1665,7 @@ dependencies = [
  "countme",
  "hashbrown 0.14.5",
  "memoffset",
- "rustc-hash",
+ "rustc-hash 1.1.0",
  "text-size",
 ]
 
@@ -1732,6 +1728,12 @@ name = "rustc-hash"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "08d43f7aa6b08d49f382cde6a7982047c3426db949b1424bc4b7ec9ae12c6ce2"
+
+[[package]]
+name = "rustc-hash"
+version = "2.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6b1e7f9a428571be2dc5bc0505c13fb6bf936822b894ec87abf8a08a4e51742d"
 
 [[package]]
 name = "rustix"
