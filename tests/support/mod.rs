@@ -109,6 +109,16 @@ impl Lib {
         assert!(d.message.contains(text), "{d:#?}");
     }
 
+    /// Asserts exactly one error, at `line` of the C++, containing `text`.
+    pub fn errors(&self, line: usize, text: &str) {
+        let [d] = self.diagnostics.as_slice() else {
+            panic!("expected one error, found {:#?}", self.diagnostics);
+        };
+        assert_eq!(d.severity, Severity::Error, "{d:#?}");
+        assert_eq!(d.pos.line, line, "{d:#?}");
+        assert!(d.message.contains(text), "{d:#?}");
+    }
+
     /// A function on a table or class: `Spring.GetUnitHealth`, `Foo:bar`.
     pub fn function(&self, name: &str) -> Function<'_> {
         let (owner, member) = name.rsplit_once(['.', ':']).expect("a function on a table");

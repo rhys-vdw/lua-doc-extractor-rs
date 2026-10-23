@@ -6,7 +6,9 @@ use crate::name::{Path, parse_path};
 use crate::scan::{Block, Pos};
 use crate::text::{Line, Src};
 use crate::types::{Typed, parse_type};
-use emmylua_parser::{LuaParser, LuaSyntaxKind, ParserConfig};
+use emmylua_parser::{
+    LuaAstNode, LuaDocBinaryType, LuaParser, LuaSyntaxKind, LuaTokenKind, ParserConfig,
+};
 
 /// Where a doc came from.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -239,11 +241,20 @@ fn split(block: &Block) -> Split {
     };
 
     let tree = LuaParser::parse(&text, ParserConfig::default());
-    let errors = tree
+    let mut errors: Vec<(usize, String)> = tree
         .get_errors()
         .iter()
         .map(|e| (line_of(usize::from(e.range.start())), e.message.to_string()))
         .collect();
+    for node in tree.get_red_root().descendants() {
+        if let Some(message) = LuaDocBinaryType::cast(node.clone()).and_then(type_operator_error) {
+            let line = line_of(usize::from(node.text_range().start()));
+            // A run like `A - b - c` nests; report only the outermost.
+            if !errors.iter().any(|(l, m)| *l == line && *m == message) {
+                errors.push((line, message));
+            }
+        }
+    }
 
     let mut items: Vec<Item> = Vec::new();
     let comment = tree
@@ -323,6 +334,38 @@ fn split(block: &Block) -> Split {
         );
     }
     Split { items, errors }
+}
+
+/// emmylua's type grammar accepts `A in B`, `A + B` and `A - B` anywhere, but they mean nothing
+/// outside a mapped key, which has its own node. So a description that starts with `in`, `+` or
+/// `-` silently becomes part of the type, and the type becomes `unknown`.
+fn type_operator_error(binary: LuaDocBinaryType) -> Option<String> {
+    // Not `get_op_token()`: it doesn't recognise `in`, which the lexer gives as `TkIn`.
+    let op = binary
+        .syntax()
+        .children_with_tokens()
+        .filter_map(|e| e.into_token())
+        .map(|t| LuaTokenKind::from(t.kind()))
+        .find(|k| {
+            matches!(
+                k,
+                LuaTokenKind::TkIn | LuaTokenKind::TkPlus | LuaTokenKind::TkMinus
+            )
+        })?;
+    let ty = binary.syntax().text().to_string().replace("\n---", " ");
+    match op {
+        LuaTokenKind::TkIn => Some(format!(
+            "EmmyLua treats `{ty}` as an invalid type because `in` is a keyword. Usually this \
+             happens when the type is being treated as part of the description. e.g.\n\
+             ```\n@param speed number in m/s\n```\n\
+             If so, change it to:\n\
+             ```\n@param speed number Speed in m/s.\n```"
+        )),
+        _ => Some(format!(
+            "EmmyLua treats `{ty}` as an invalid type. To avoid this, do not start your \
+             description with an `-` or `+`."
+        )),
+    }
 }
 
 /// Markup that emmylua reads differently from how it looks.
