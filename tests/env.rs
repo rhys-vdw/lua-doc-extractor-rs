@@ -5,7 +5,10 @@ mod support;
 
 use lua_doc_extractor::doc::{Diagnostic, Doc, Severity, parse_doc};
 use lua_doc_extractor::env::{Routes, apply_file_env, key, parse_routes};
-use lua_doc_extractor::{Options, Output, extract_library, scan::scan};
+use lua_doc_extractor::{
+    Options, Output, extract_library,
+    scan::{Syntax, scan},
+};
 use support::dedent;
 
 /// Three routes over two environments: each one alone, and both.
@@ -55,7 +58,7 @@ fn output<'a>(outputs: &'a [Output], name: &str) -> &'a Output {
 /// A file's docs, with its file-level `@env` applied.
 fn docs(cpp: &str) -> (Vec<Doc>, Vec<Diagnostic>) {
     let mut diagnostics = Vec::new();
-    let mut docs: Vec<Doc> = scan(&dedent(cpp))
+    let mut docs: Vec<Doc> = scan(&dedent(cpp), &Syntax::default())
         .iter()
         .map(|block| parse_doc("a.cpp", block, &mut diagnostics))
         .collect();

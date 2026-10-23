@@ -4,13 +4,16 @@
 use crate::decl::{Comment, Field};
 use crate::doc::Source;
 use crate::library::Item;
+use crate::scan::Syntax;
 use crate::text::{Line, Src, commented, join, trimmed};
 
-/// Options that affect the generated text.
+/// Options that affect extraction and the generated text.
 #[derive(Debug, Clone, Default)]
 pub struct Options {
     /// Base URL for source links, e.g. `https://github.com/org/repo/blob/<sha>/`.
     pub repo: Option<String>,
+    /// The comments that are docs.
+    pub syntax: Syntax,
 }
 
 /// One generated Lua file.

@@ -6,6 +6,7 @@ use lua_doc_extractor::{Options, extract};
 fn mapped(cpp: &str) -> String {
     let options = Options {
         repo: Some("https://example.com/".into()),
+        ..Default::default()
     };
     let (rendered, diagnostics) = extract("test.cpp", cpp, &options);
     assert!(diagnostics.is_empty(), "{diagnostics:#?}");

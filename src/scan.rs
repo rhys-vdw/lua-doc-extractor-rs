@@ -2,6 +2,38 @@
 //!
 //! The host language is never parsed: only the comment markers are recognised.
 
+use fancy_regex::{Match, Regex};
+
+/// Opens a C-style doc: exactly three stars, so `/****` banners and `/***/` aren't docs.
+pub const C_OPEN: &str = r"/\*{3}(?![*/])";
+/// Closes a C-style comment, along with any stars before it.
+pub const C_CLOSE: &str = r"\*+/";
+/// The ` * ` decoration of a C-style comment's lines.
+pub const C_LINE: &str = r"^\s*\*";
+
+/// The patterns that mark a doc comment. Each match is exactly the marker, so lookaround is
+/// how a pattern checks what's around it without taking it.
+#[derive(Debug, Clone)]
+pub struct Syntax {
+    /// Opens a block. The text starts after it.
+    pub open: Regex,
+    /// Closes a block. The text ends before it.
+    pub close: Regex,
+    /// Decoration at the start of each line after the first, removed from the text.
+    pub line: Regex,
+}
+
+/// C-style `/*** ... */`.
+impl Default for Syntax {
+    fn default() -> Self {
+        Syntax {
+            open: Regex::new(C_OPEN).unwrap(),
+            close: Regex::new(C_CLOSE).unwrap(),
+            line: Regex::new(C_LINE).unwrap(),
+        }
+    }
+}
+
 /// A 1-based position in a source file.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Pos {
@@ -27,21 +59,20 @@ pub struct Block {
     pub lines: Vec<Line>,
 }
 
-/// Extracts every `/***` block from `source`.
+/// Extracts every block marked by `syntax` from `source`.
 ///
-/// A block opens with `/` and three or more `*` (but not `/***/`), and closes at the
-/// next `*/`. On every line but the first, leading whitespace and a single `*` are
-/// removed. The common indent is then removed, along with leading and trailing blank
-/// lines and trailing whitespace.
-pub fn scan(source: &str) -> Vec<Block> {
+/// A block closes at the first close after its open. On every line but the first, the
+/// line decoration is removed. The common indent is then removed, along with leading and
+/// trailing blank lines and trailing whitespace.
+pub fn scan(source: &str, syntax: &Syntax) -> Vec<Block> {
     let mut blocks = Vec::new();
     let lines: Vec<&str> = source.split('\n').collect();
 
     let mut line_index = 0;
     let mut col = 0; // byte offset into the current line
     while line_index < lines.len() {
-        let line = lines[line_index];
-        let Some(open) = find_open(&line[col..]).map(|o| o + col) else {
+        let line = lines[line_index].trim_end_matches('\r');
+        let Some(open) = find(&syntax.open, line, col) else {
             line_index += 1;
             col = 0;
             continue;
@@ -49,45 +80,35 @@ pub fn scan(source: &str) -> Vec<Block> {
 
         let start = Pos {
             line: line_index + 1,
-            col: char_col(line, open),
+            col: char_col(line, open.start()),
         };
-        let mut body_start = open + 1 + count_stars(&line[open + 1..]);
+        let mut body_start = Some(open.end());
         let mut raw: Vec<(Pos, String)> = Vec::new();
-        let mut first = true;
         let mut end = None;
 
         while line_index < lines.len() {
             let line = lines[line_index].trim_end_matches('\r');
-            let mut text_start = body_start.min(line.len());
-            if !first {
-                text_start = strip_decoration(line);
-            }
-            let rest = &line[text_start..];
-            if let Some(close) = find_close(rest) {
-                let close_abs = text_start + close.start;
-                raw.push((
-                    Pos {
-                        line: line_index + 1,
-                        col: char_col(line, text_start),
-                    },
-                    rest[..close.start].to_string(),
-                ));
-                end = Some(Pos {
-                    line: line_index + 1,
-                    col: char_col(line, close_abs),
-                });
-                col = text_start + close.end;
-                break;
-            }
+            let close = find(&syntax.close, line, body_start.unwrap_or(0));
+            let body_end = close.map_or(line.len(), |c| c.start());
+            // The first line's text starts after the open; later lines' after their decoration.
+            let text_start = body_start
+                .unwrap_or_else(|| find(&syntax.line, &line[..body_end], 0).map_or(0, |m| m.end()));
             raw.push((
                 Pos {
                     line: line_index + 1,
                     col: char_col(line, text_start),
                 },
-                rest.to_string(),
+                line[text_start..body_end].to_string(),
             ));
-            first = false;
-            body_start = 0;
+            if let Some(close) = close {
+                end = Some(Pos {
+                    line: line_index + 1,
+                    col: char_col(line, close.start()),
+                });
+                col = close.end();
+                break;
+            }
+            body_start = None;
             line_index += 1;
         }
 
@@ -105,48 +126,10 @@ pub fn scan(source: &str) -> Vec<Block> {
     blocks
 }
 
-/// Finds `/***` that isn't a `/****/` banner.
-fn find_open(s: &str) -> Option<usize> {
-    let mut search = 0;
-    while let Some(i) = s[search..].find("/***").map(|i| i + search) {
-        let stars = count_stars(&s[i + 1..]);
-        if !s[i + 1 + stars..].starts_with('/') {
-            return Some(i);
-        }
-        search = i + 1 + stars;
-    }
-    None
-}
-
-struct Close {
-    start: usize,
-    end: usize,
-}
-
-/// Finds `*+/`, returning the range of the whole run.
-fn find_close(s: &str) -> Option<Close> {
-    let slash = s.find("*/")? + 1;
-    let start = s[..slash].trim_end_matches('*').len();
-    Some(Close {
-        start,
-        end: slash + 1,
-    })
-}
-
-fn count_stars(s: &str) -> usize {
-    s.bytes().take_while(|&b| b == b'*').count()
-}
-
-/// Byte offset of the text after leading whitespace and one `*` (unless it closes the
-/// comment).
-fn strip_decoration(line: &str) -> usize {
-    let indent = line.len() - line.trim_start().len();
-    let rest = &line[indent..];
-    if rest.starts_with('*') && !rest.starts_with("*/") {
-        indent + 1
-    } else {
-        0
-    }
+/// The first match of `re` in `s` at or after byte `from`.
+fn find<'s>(re: &Regex, s: &'s str, from: usize) -> Option<Match<'s>> {
+    re.find_from_pos(s, from)
+        .expect("doc comment pattern exceeded its backtrack limit")
 }
 
 fn char_col(line: &str, byte: usize) -> usize {
@@ -194,13 +177,18 @@ fn tidy(raw: Vec<(Pos, String)>) -> Vec<Line> {
 mod tests {
     use super::*;
 
+    /// Scans `source` as C.
+    fn c(source: &str) -> Vec<Block> {
+        scan(source, &Syntax::default())
+    }
+
     fn texts(block: &Block) -> Vec<&str> {
         block.lines.iter().map(|l| l.text.as_str()).collect()
     }
 
     #[test]
     fn multi_line_block() {
-        let blocks = scan("int x;\n/***\n * Hello\n *   indented\n * @function Foo\n */\n");
+        let blocks = c("int x;\n/***\n * Hello\n *   indented\n * @function Foo\n */\n");
         assert_eq!(blocks.len(), 1);
         assert_eq!(texts(&blocks[0]), ["Hello", "  indented", "@function Foo"]);
         assert_eq!(blocks[0].start, Pos { line: 2, col: 1 });
@@ -210,7 +198,7 @@ mod tests {
 
     #[test]
     fn single_line_blocks() {
-        let blocks = scan("\t/*** @field CMD.OPT_ALT 128 */ /*** @field B 1 */");
+        let blocks = c("\t/*** @field CMD.OPT_ALT 128 */ /*** @field B 1 */");
         assert_eq!(blocks.len(), 2);
         assert_eq!(texts(&blocks[0]), ["@field CMD.OPT_ALT 128"]);
         assert_eq!(texts(&blocks[1]), ["@field B 1"]);
@@ -218,12 +206,44 @@ mod tests {
 
     #[test]
     fn indented_block_without_decoration_on_first_line() {
-        let blocks = scan("\t\t/*** @function Spring.X\n\t\t * Long.\n\t\t */");
+        let blocks = c("\t\t/*** @function Spring.X\n\t\t * Long.\n\t\t */");
         assert_eq!(texts(&blocks[0]), ["@function Spring.X", "Long."]);
     }
 
     #[test]
     fn ignores_banners_and_plain_comments() {
-        assert!(scan("/******/\n/* not docs */\n/** nor these */").is_empty());
+        assert!(c("/******/\n/***/\n/* not docs */\n/** nor these */").is_empty());
+    }
+
+    #[test]
+    fn ignores_banners_with_text() {
+        let source = "/****************\n * Engine constants\n * @see rts/Lua/LuaConstEngine.cpp\n****************/\n";
+        assert!(c(source).is_empty());
+    }
+
+    #[test]
+    fn text_straight_after_the_open() {
+        let blocks = c("/***Can only be called here. */");
+        assert_eq!(texts(&blocks[0]), ["Can only be called here."]);
+        assert_eq!(blocks[0].lines[0].pos, Pos { line: 1, col: 5 });
+    }
+
+    #[test]
+    fn close_with_several_stars() {
+        let blocks = c("/***\n * Hello\n **/");
+        assert_eq!(texts(&blocks[0]), ["Hello"]);
+        assert_eq!(blocks[0].end, Pos { line: 3, col: 2 });
+    }
+
+    #[test]
+    fn other_syntax() {
+        let syntax = Syntax {
+            open: Regex::new(r"/\*lua\b").unwrap(),
+            close: Regex::new(r"\*/").unwrap(),
+            line: Regex::new(r"^\s*\*?").unwrap(),
+        };
+        let blocks = scan("/*lua\n  @function Foo\n */ /*** not this */", &syntax);
+        assert_eq!(blocks.len(), 1);
+        assert_eq!(texts(&blocks[0]), ["@function Foo"]);
     }
 }
