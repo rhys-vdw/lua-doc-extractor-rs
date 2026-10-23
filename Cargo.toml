@@ -1,6 +1,6 @@
 [package]
 name = "lua-doc-extractor"
-version = "4.1.0"
+version = "4.1.1"
 edition = "2024"
 # `if let ... && let ...` chains.
 rust-version = "1.88"
