@@ -41,7 +41,7 @@ pub struct Output {
 /// Extracts one source file into one Lua file, with its line map.
 pub fn extract(path: &str, source: &str, options: &Options) -> (Rendered, Vec<Diagnostic>) {
     let mut diagnostics = Vec::new();
-    let mut docs = parse_file(path, source, &mut diagnostics);
+    let mut docs = parse_file(path, source, options, &mut diagnostics);
     env::apply_file_env(&mut docs, &mut diagnostics);
     let rendered = build(docs, options, &mut diagnostics);
     sort(&mut diagnostics);
@@ -61,7 +61,7 @@ pub fn extract_library(
     let mut index: HashMap<String, usize> = HashMap::new();
 
     for (path, source) in files {
-        let mut docs = parse_file(path, source, &mut diagnostics);
+        let mut docs = parse_file(path, source, options, &mut diagnostics);
         env::apply_file_env(&mut docs, &mut diagnostics);
         let mut unrouted = HashSet::new();
         for doc in docs {
@@ -157,8 +157,13 @@ pub fn source_map(outputs: &[Output]) -> Value {
 }
 
 /// A source file's docs, without empty ones.
-fn parse_file(path: &str, source: &str, diagnostics: &mut Vec<Diagnostic>) -> Vec<Doc> {
-    scan::scan(source)
+fn parse_file(
+    path: &str,
+    source: &str,
+    options: &Options,
+    diagnostics: &mut Vec<Diagnostic>,
+) -> Vec<Doc> {
+    scan::scan(source, &options.syntax)
         .iter()
         .map(|block| parse_doc(path, block, diagnostics))
         .filter(|doc| !doc.description.is_empty() || !doc.tags.is_empty())

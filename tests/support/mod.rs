@@ -46,6 +46,7 @@ pub fn extract(cpp: &str) -> Lib {
 pub fn extract_with_repo(stubs: &str, cpp: &str, repo: &str) -> Lib {
     let options = Options {
         repo: Some(repo.to_string()),
+        ..Default::default()
     };
     let lib = run(stubs, cpp, &options);
     assert!(

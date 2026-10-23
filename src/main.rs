@@ -3,7 +3,11 @@ use std::process::ExitCode;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use lua_doc_extractor::{
-    Options, doc::Severity, env, extract_library, remap, scan::scan, source_map,
+    Options,
+    doc::Severity,
+    env, extract_library, remap,
+    scan::{Syntax, scan},
+    source_map,
 };
 
 /// Extracts Lua docs from C-style comments.
@@ -125,7 +129,10 @@ fn run_remap(args: RemapArgs) -> ExitCode {
 }
 
 fn run_extract(args: Extract) -> ExitCode {
-    let options = Options { repo: args.repo };
+    let options = Options {
+        repo: args.repo,
+        syntax: Syntax::default(),
+    };
     let (routes, route_errors) = env::parse_routes(&args.env);
     if !route_errors.is_empty() {
         for e in route_errors {
@@ -163,7 +170,7 @@ fn run_extract(args: Extract) -> ExitCode {
             continue;
         };
         match std::fs::read_to_string(file) {
-            Ok(source) if scan(&source).is_empty() => {}
+            Ok(source) if scan(&source, &options.syntax).is_empty() => {}
             Ok(source) => sources.push((path, source)),
             Err(e) => {
                 eprintln!("{path}: error: {e}");

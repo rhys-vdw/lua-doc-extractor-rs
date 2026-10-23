@@ -9,14 +9,14 @@
 use std::collections::BTreeMap;
 
 use emmylua_parser::{LuaKind, LuaParser, LuaSyntaxKind, LuaTokenKind, ParserConfig};
-use lua_doc_extractor::scan::scan;
+use lua_doc_extractor::scan::{Syntax, scan};
 
 fn main() {
     let mut counts: BTreeMap<(String, String), Vec<String>> = BTreeMap::new();
 
     for path in std::env::args().skip(1) {
         let source = std::fs::read_to_string(&path).unwrap();
-        for block in scan(&source) {
+        for block in scan(&source, &Syntax::default()) {
             let text: String = block
                 .lines
                 .iter()

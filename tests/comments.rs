@@ -36,7 +36,7 @@ fn single_line_tag_without_code() {
 }
 
 #[test]
-fn extra_stars_after_the_opening_are_ignored() {
+fn more_than_three_stars_is_a_banner_not_a_doc() {
     let lib = extract("/****************\n * @table Foo\n */");
     insta::assert_snapshot!(lib.body());
 }

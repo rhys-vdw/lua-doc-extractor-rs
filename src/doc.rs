@@ -482,11 +482,11 @@ fn continuation(rest: Line, more: &[Line]) -> Vec<Line> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::scan::scan;
+    use crate::scan::{Syntax, scan};
 
     fn parse(source: &str) -> (Doc, Vec<Diagnostic>) {
         let mut diagnostics = Vec::new();
-        let block = &scan(source)[0];
+        let block = &scan(source, &Syntax::default())[0];
         (parse_doc("test.cpp", block, &mut diagnostics), diagnostics)
     }
 
