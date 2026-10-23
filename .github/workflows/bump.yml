@@ -21,7 +21,7 @@ jobs:
       contents: write # push the commit and tag
       actions: write # start release.yml
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: main
       - uses: dtolnay/rust-toolchain@stable
