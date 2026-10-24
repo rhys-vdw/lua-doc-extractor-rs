@@ -1,9 +1,11 @@
 ---
 source: tests/fields.rs
+assertion_line: 79
 expression: lib.body()
 ---
 ---This is my cool deprecated global.
 ---
 ---@type Foo
 ---@deprecated
+---@diagnostic disable-next-line: assign-type-mismatch
 foo = nil

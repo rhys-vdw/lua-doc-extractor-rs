@@ -79,35 +79,39 @@ fn global_with_description_below() {
     insta::assert_snapshot!(lib.body());
 }
 
-/// Each type is written to `---@type` as given, and checked by emmylua's parser.
+/// Each type is written to `---@type` as given, and checked by emmylua's parser. The value is a
+/// placeholder: `{}` for a table, `nil` if the type allows it, else `nil` with the type check
+/// turned off for it.
 #[test]
 fn global_types() {
+    const TABLE: &str = "Foo = {}";
+    const NIL: &str = "Foo = nil";
+    const UNCHECKED_NIL: &str = "---@diagnostic disable-next-line: assign-type-mismatch\nFoo = nil";
     let types = [
-        "integer",
-        "string?",
-        "table<string, boolean>",
-        "(integer|table<string, boolean>|Foo)?",
-        "{}",
-        "{ x: integer, y: integer }",
-        "{ x: number?, y: A|B }",
-        "A|B",
-        "integer|string",
-        "{ [string]: integer }",
-        "{ [(string|table<string, string>?)]: integer }",
-        "fun()",
-        "fun(x: integer, z: string): string",
-        "fun(integer: string): (string|number?)",
-        "fun(y: string): string|number?",
-        "[number, integer]",
-        "integer[]",
-        "a.b.c",
+        ("integer", UNCHECKED_NIL),
+        ("string?", NIL),
+        ("table<string, boolean>", TABLE),
+        ("(integer|table<string, boolean>|Foo)?", NIL),
+        ("{}", TABLE),
+        ("{ x: integer, y: integer }", TABLE),
+        ("{ x: number?, y: A|B }", TABLE),
+        ("A|B", UNCHECKED_NIL),
+        ("integer|string", UNCHECKED_NIL),
+        ("{ [string]: integer }", TABLE),
+        ("{ [(string|table<string, string>?)]: integer }", TABLE),
+        ("fun()", UNCHECKED_NIL),
+        ("fun(x: integer, z: string): string", UNCHECKED_NIL),
+        ("fun(integer: string): (string|number?)", UNCHECKED_NIL),
+        ("fun(y: string): string|number?", UNCHECKED_NIL),
+        ("[number, integer]", UNCHECKED_NIL),
+        ("integer[]", TABLE),
+        ("a.b.c", UNCHECKED_NIL),
     ];
-    for ty in types {
+    for (ty, value) in types {
         let lib = extract(&format!("/*** @global Foo {ty} The description. */"));
         assert!(
-            lib.body().contains(&format!(
-                "---The description.\n---\n---@type {ty}\nFoo = nil"
-            )),
+            lib.body()
+                .contains(&format!("---The description.\n---\n---@type {ty}\n{value}")),
             "{ty}:\n{}",
             lib.body()
         );

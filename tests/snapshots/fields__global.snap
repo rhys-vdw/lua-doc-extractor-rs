@@ -1,8 +1,10 @@
 ---
 source: tests/fields.rs
+assertion_line: 64
 expression: lib.body()
 ---
 ---This is my cool global.
 ---
 ---@type Foo
+---@diagnostic disable-next-line: assign-type-mismatch
 foo = nil

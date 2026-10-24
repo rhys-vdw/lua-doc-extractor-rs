@@ -146,7 +146,10 @@ enum InTable {
     No,
 }
 
-/// A literal becomes the value (`STOP = 0`); any other type becomes `---@type` and `nil`.
+/// A literal becomes the value (`STOP = 0`); any other type becomes `---@type` and a placeholder
+/// value: `{}` for a table, else `nil`. A standalone `nil` that the type doesn't allow is marked,
+/// so emmylua doesn't report it: the library declares the field, it doesn't set it. (Neither
+/// emmylua nor LuaLS checks a field in a table constructor against its `---@type`.)
 ///
 /// A field's own description and its doc's description are both kept. As in v3, a field in a
 /// table puts its own first, and a standalone field puts the doc's first.
@@ -161,6 +164,7 @@ fn render_field(field: &Field, in_table: InTable, options: &Options) -> Vec<Line
     };
     join(&mut lines, rest);
     let indent = if in_table == InTable::Yes { "\t" } else { "" };
+    let mut placeholder_nil = false;
     let value = match &field.typed.literal {
         Some(literal) => literal.clone(),
         None => {
@@ -168,12 +172,22 @@ fn render_field(field: &Field, in_table: InTable, options: &Options) -> Vec<Line
             let first = format!("@type {}", ty[0].text);
             ty[0].text = first.trim_end().to_string();
             join(&mut lines, ty);
-            "nil".to_string()
+            if field.typed.is_table {
+                "{}".to_string()
+            } else {
+                placeholder_nil = in_table == InTable::No && !field.typed.is_nullable;
+                "nil".to_string()
+            }
         }
     };
     let mut lines = trimmed(lines);
     lines.extend(field.comment.tags.iter().cloned());
     lines.extend(see_link(&field.source, options));
+    if placeholder_nil {
+        lines.push(Line::generated(
+            "@diagnostic disable-next-line: assign-type-mismatch",
+        ));
+    }
     let mut out = commented(lines, indent);
     out.push(Line::new(
         format!("{indent}{} = {value}", field.path),

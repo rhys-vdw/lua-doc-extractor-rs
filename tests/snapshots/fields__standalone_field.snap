@@ -1,8 +1,10 @@
 ---
 source: tests/fields.rs
+assertion_line: 22
 expression: lib.body()
 ---
 ---The description.
 ---
 ---@type integer
+---@diagnostic disable-next-line: assign-type-mismatch
 SomeTable.field = nil
