@@ -1,5 +1,6 @@
 ---
 source: tests/line_map.rs
+assertion_line: 63
 expression: mapped(cpp)
 ---
  - | 
@@ -9,4 +10,5 @@ expression: mapped(cpp)
  - | ---
  3 | ---@type boolean
  1 | ---@see [test.cpp#L1-L4](https://example.com/test.cpp#L1-L4)
+ - | ---@diagnostic disable-next-line: assign-type-mismatch
  3 | Spring.MoveCtrl.Enabled = nil

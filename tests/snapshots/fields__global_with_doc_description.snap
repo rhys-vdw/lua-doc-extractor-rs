@@ -1,5 +1,6 @@
 ---
 source: tests/fields.rs
+assertion_line: 40
 expression: lib.body()
 ---
 ---Some description.
@@ -9,4 +10,5 @@ expression: lib.body()
 ---Some more.
 ---
 ---@type number
+---@diagnostic disable-next-line: assign-type-mismatch
 foo = nil

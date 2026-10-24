@@ -155,3 +155,22 @@ fn merges_an_enum_with_a_table_of_the_same_name() {
     lib.field("Foo.SIX").has_value("6");
     insta::assert_snapshot!(lib.body());
 }
+
+/// A table-typed field gets `{}`; any other type gets `nil`, which a checker doesn't compare with
+/// the `---@type` of a field in a table constructor.
+#[test]
+fn field_placeholder_values() {
+    let lib = extract(
+        r#"
+        /***
+         * @field list integer[] A list.
+         * @field count integer A count.
+         * @table TheTable
+         */
+        "#,
+    );
+    let body = lib.body();
+    assert!(body.contains("---@type integer[]\n\tlist = {},"), "{body}");
+    assert!(body.contains("---@type integer\n\tcount = nil\n"), "{body}");
+    assert!(!body.contains("@diagnostic"), "{body}");
+}

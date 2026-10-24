@@ -17,6 +17,10 @@ pub struct Typed {
     pub ty: Vec<Line>,
     /// The literal value, if the type is one (`128`, `"name"`, `true`).
     pub literal: Option<String>,
+    /// A table: an array, an object shape, `table` or `table<K, V>`.
+    pub is_table: bool,
+    /// `nil` is one of its values (`T?`).
+    pub is_nullable: bool,
     /// Everything after the type.
     pub description: Vec<Line>,
 }
@@ -80,6 +84,8 @@ pub fn parse_type(input: &[Line]) -> Result<Typed, String> {
     }
     let ty_text: Vec<&str> = ty_lines.iter().map(|l| l.text.as_str()).collect();
     let literal = is_literal(ty.syntax()).then(|| ty_text.join("\n"));
+    let is_table = is_table(ty.syntax());
+    let is_nullable = ty.syntax().kind() == LuaSyntaxKind::TypeNullable.into();
     // emmylua ends a type at `?`, so `T?|U` and `T?[]` silently become type `T?` and a
     // description starting `|U` or `[]`.
     let rest = lines[end.0][end.1..].trim_start();
@@ -99,6 +105,8 @@ pub fn parse_type(input: &[Line]) -> Result<Typed, String> {
     Ok(Typed {
         ty: ty_lines,
         literal,
+        is_table,
+        is_nullable,
         description: trim_lines(after),
     })
 }
@@ -113,6 +121,16 @@ fn is_literal(node: &emmylua_parser::LuaSyntaxNode) -> bool {
                     .children()
                     .all(|c| c.kind() == LuaSyntaxKind::TypeLiteral.into())
         }
+        _ => false,
+    }
+}
+
+/// An array, object or mapped shape, `table` or `table<K, V>`, which `{}` can stand for.
+fn is_table(node: &emmylua_parser::LuaSyntaxNode) -> bool {
+    match node.kind().into() {
+        LuaSyntaxKind::TypeArray | LuaSyntaxKind::TypeObject | LuaSyntaxKind::TypeMapped => true,
+        LuaSyntaxKind::TypeName => node.text() == "table",
+        LuaSyntaxKind::TypeGeneric => node.text().to_string().starts_with("table<"),
         _ => false,
     }
 }
